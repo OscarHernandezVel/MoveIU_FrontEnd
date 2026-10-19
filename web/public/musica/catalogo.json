@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "tracks": [
+    {
+      "id": "alba",
+      "title": "Alba en la ruta",
+      "artist": "MoveIU (pista original)",
+      "file": "/musica/alba.mp3",
+      "seconds": 69,
+      "license": "Obra original del proyecto, sin derechos de terceros"
+    },
+    {
+      "id": "mediodia",
+      "title": "Mediodía en el centro",
+      "artist": "MoveIU (pista original)",
+      "file": "/musica/mediodia.mp3",
+      "seconds": 65,
+      "license": "Obra original del proyecto, sin derechos de terceros"
+    },
+    {
+      "id": "tarde",
+      "title": "Tarde de lluvia fina",
+      "artist": "MoveIU (pista original)",
+      "file": "/musica/tarde.mp3",
+      "seconds": 70,
+      "license": "Obra original del proyecto, sin derechos de terceros"
+    },
+    {
+      "id": "ultima",
+      "title": "Última parada",
+      "artist": "MoveIU (pista original)",
+      "file": "/musica/ultima.mp3",
+      "seconds": 68,
+      "license": "Obra original del proyecto, sin derechos de terceros"
+    }
+  ]
+}
