@@ -1,0 +1,801 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>MoveIU</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#eef0f3; --panel:#ffffff; --fg:#1b2431; --muted:#566170; --line:#cdd3dc; --accent:#2b4c7e; --accent-soft:#dfe7f2;
+  --ok:#2a7566; --warn:#9a6a14; --bad:#a1443b; --canvas:#e6e9ee; --floor:#d8cdb4; --board:#c6bba3; --wall:#aab4c2; --wallrail:#7d8899; --seat:#a39f94; --seatback:#7a766b;
+  --label-bg:rgba(255,255,255,.92); --shadow:0 1px 2px rgba(20,30,45,.08);
+  --mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace; --sans:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg:#0f141b; --panel:#171e27; --fg:#e4e8ee; --muted:#98a3b2; --line:#2a3441; --accent:#8db4e6; --accent-soft:#1f2c3f;
+  --ok:#5cc0a6; --warn:#e0b055; --bad:#e58b80; --canvas:#121922; --floor:#4a4130; --board:#3a3326; --wall:#5a687c; --wallrail:#8795aa; --seat:#8a8678; --seatback:#aaa597;
+  --label-bg:rgba(23,30,39,.92); --shadow:none; color-scheme:dark; } }
+:root[data-theme="dark"] {
+  --bg:#0f141b; --panel:#171e27; --fg:#e4e8ee; --muted:#98a3b2; --line:#2a3441; --accent:#8db4e6; --accent-soft:#1f2c3f;
+  --ok:#5cc0a6; --warn:#e0b055; --bad:#e58b80; --canvas:#121922; --floor:#4a4130; --board:#3a3326; --wall:#5a687c; --wallrail:#8795aa; --seat:#8a8678; --seatback:#aaa597;
+  --label-bg:rgba(23,30,39,.92); --shadow:none; color-scheme:dark; }
+* { box-sizing:border-box; }
+html, body { height:100%; }
+body { background:var(--bg); color:var(--fg); font-family:var(--sans); font-size:14px; line-height:1.45; padding-inline:16px; padding-block:12px; }
+.app { max-width:1320px; margin:0 auto; height:100%; min-height:640px; display:flex; flex-direction:column; gap:10px; }
+header { display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:8px 16px; }
+h1 { font-size:1.6rem; font-weight:600; margin:0; letter-spacing:.02em; line-height:1.1; }
+.brand { display:flex; align-items:center; gap:12px; } .brand svg { flex:none; color:var(--accent); }
+.sub { color:var(--muted); margin:2px 0 0; font-size:.85rem; max-width:62ch; }
+[role=tablist] { display:flex; gap:4px; border-bottom:1px solid var(--line); }
+[role=tab] { font:inherit; font-weight:500; color:var(--muted); background:none; border:0; border-bottom:2px solid transparent; padding:8px 14px; cursor:pointer; }
+[role=tab][aria-selected=true] { color:var(--fg); border-bottom-color:var(--accent); }
+[role=tab]:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.work { flex:1; min-height:0; display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:12px; }
+.stage { position:relative; min-height:380px; background:var(--canvas); border:1px solid var(--line); border-radius:8px; overflow:hidden; touch-action:none; }
+.stage canvas { position:absolute; inset:0; width:100%; height:100%; display:block; cursor:grab; }
+.stage canvas.drag { cursor:grabbing; }
+.labels { position:absolute; inset:0; pointer-events:none; overflow:hidden; }
+.lbl { position:absolute; transform:translate(-50%,-100%); white-space:nowrap; background:var(--label-bg); border:1px solid var(--line); border-radius:4px; padding:2px 7px; font-size:11.5px; line-height:1.3; box-shadow:var(--shadow); }
+.lbl b { font-weight:600; } .lbl small { display:block; color:var(--muted); font-family:var(--mono); font-size:10.5px; }
+.lbl.tag { font-family:var(--mono); font-size:10.5px; padding:1px 5px; }
+.lbl.sel { border-color:var(--accent); outline:1px solid var(--accent); }
+.lbl.ok { border-color:var(--ok); color:var(--ok); } .lbl.bad { border-color:var(--bad); color:var(--bad); } .lbl.warn { border-color:var(--warn); color:var(--warn); }
+.hint { position:absolute; left:10px; bottom:8px; font-size:11.5px; color:var(--muted); background:var(--label-bg); padding:2px 8px; border-radius:4px; pointer-events:none; }
+.tip { position:absolute; pointer-events:none; background:var(--fg); color:var(--bg); font-size:12px; padding:3px 8px; border-radius:4px; transform:translate(10px,-120%); white-space:nowrap; z-index:3; }
+.nogl { position:absolute; inset:0; display:grid; place-items:center; padding:24px; text-align:center; color:var(--muted); }
+aside { min-width:0; display:flex; flex-direction:column; gap:10px; overflow:auto; }
+.card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px 14px; box-shadow:var(--shadow); }
+.card h2 { font-size:.95rem; font-weight:600; margin:0 0 6px; }
+.card h3 { font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-weight:600; margin:12px 0 4px; }
+.card p { margin:4px 0; } .muted { color:var(--muted); }
+.mono { font-family:var(--mono); font-size:.85em; }
+.btn { font:inherit; font-weight:500; background:var(--accent); color:var(--panel); border:1px solid var(--accent); border-radius:6px; padding:6px 12px; cursor:pointer; }
+.btn.ghost { background:transparent; color:var(--fg); border-color:var(--line); }
+.btn[aria-pressed=true] { background:var(--accent-soft); color:var(--fg); border-color:var(--accent); }
+.btn:disabled { opacity:.55; cursor:default; }
+.row { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+.nodes { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
+.nodes .btn { padding:5px 6px; font-size:12.5px; }
+dl.kv { display:grid; grid-template-columns:auto 1fr; gap:3px 12px; margin:6px 0; }
+dl.kv dt { color:var(--muted); } dl.kv dd { margin:0; text-align:right; font-variant-numeric:tabular-nums; font-weight:500; }
+ol.steps { margin:6px 0 0; padding-left:20px; } ol.steps li { margin:3px 0; color:var(--muted); } ol.steps li.on { color:var(--fg); font-weight:500; } ol.steps li.done { color:var(--ok); }
+table.rules { width:100%; border-collapse:collapse; font-size:12.5px; } .rules td, .rules th { text-align:left; padding:3px 4px; border-bottom:1px solid var(--line); }
+.meter { height:8px; background:var(--accent-soft); border-radius:4px; overflow:hidden; margin:4px 0; } .meter i { display:block; height:100%; background:var(--accent); }
+.legend { display:grid; grid-template-columns:1fr 1fr; gap:4px 10px; font-size:12.5px; }
+.legend span { display:flex; gap:7px; align-items:center; } .sw { width:14px; height:14px; border-radius:3px; border:1px solid var(--line); flex:none; }
+.pill { display:inline-block; padding:1px 8px; border:1px solid currentColor; border-radius:99px; font-size:12px; font-weight:600; }
+.field { display:grid; gap:2px; margin:6px 0; } .field label { font-size:12px; color:var(--muted); }
+.field input, .field select { font:inherit; padding:5px 7px; border:1px solid var(--line); border-radius:6px; background:var(--panel); color:var(--fg); min-width:0; }
+details summary { cursor:pointer; font-weight:500; } pre { margin:6px 0 0; padding:8px; background:var(--bg); border-radius:6px; overflow:auto; max-height:170px; font-size:11px; }
+.priv { border-left:3px solid var(--ok); }
+[hidden] { display:none !important; }
+@media (max-width:900px) { .work { grid-template-columns:minmax(0,1fr); } .stage { height:58vh; } aside { overflow:visible; } body { padding-inline:16px; } .app { height:auto; } }
+@media (max-width:900px) { .lbl.minor { display:none; } }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior:auto !important; } }
+</style><script>try{var __t=localStorage.getItem('moveiu_theme');if(__t==='day')document.documentElement.setAttribute('data-theme','light');else if(__t==='night'||__t==='contrast')document.documentElement.setAttribute('data-theme','dark')}catch(e){}</script>
+</head><body>
+
+<div class="app">
+  <header>
+    <div class="brand">
+      <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true"><rect x="1.5" y="1.5" width="37" height="37" rx="9" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M9 25V15.5c0-1.4 1.1-2.5 2.5-2.5h17c1.4 0 2.5 1.1 2.5 2.5V25" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><path d="M9 25h22" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><circle cx="14" cy="28.5" r="2.4" fill="currentColor"/><circle cx="26" cy="28.5" r="2.4" fill="currentColor"/><path d="M9 19.5h22" stroke="currentColor" stroke-width="2"/></svg>
+      <div>
+        <h1>MoveIU</h1>
+        <p class="sub">Capacidad neta de buses en tiempo real: red de cinco módulos abiertos y gemelo digital de la cabina, sin imágenes de cámara.</p>
+      </div>
+    </div>
+    <div class="row" id="srcBadge" aria-live="polite"></div>
+  </header>
+  <div role="tablist" aria-label="Vistas">
+    <button role="tab" id="tab-arch" aria-selected="true" aria-controls="view-arch">Arquitectura</button>
+    <button role="tab" id="tab-twin" aria-selected="false" aria-controls="view-twin" tabindex="-1">Gemelo digital del bus</button>
+  </div>
+  <div class="work">
+    <div class="stage" id="stage">
+      <canvas id="gl" aria-label="Escena 3D interactiva" role="img"></canvas>
+      <div class="labels" id="labels"></div>
+      <div class="tip" id="tip" hidden></div>
+      <div class="hint" id="hint">Arrastre para girar · rueda o pellizco para acercar</div>
+      <div class="nogl" id="nogl" hidden>No se pudo iniciar WebGL en este navegador. La información de cada módulo y de la cabina sigue disponible en el panel de la derecha.</div>
+    </div>
+    <aside>
+      <section id="view-arch" role="tabpanel" aria-labelledby="tab-arch" class="card-stack" style="display:grid;gap:10px">
+        <div class="card">
+          <h2>Red de cinco módulos</h2>
+          <p class="muted">El front solo habla con el back. La base relacional, el almacén en memoria y la IA se consultan únicamente a través del back.</p>
+          <div class="row" style="margin:8px 0"><button class="btn" id="simBtn">Simular petición</button><button class="btn ghost" id="simReset" hidden>Reiniciar</button></div>
+          <ol class="steps" id="simSteps"></ol>
+          <div class="nodes" id="nodeBtns" role="group" aria-label="Módulos"></div>
+        </div>
+        <div class="card" id="detail" aria-live="polite"></div>
+        <div class="card">
+          <h2>Reglas de conexión</h2>
+          <table class="rules"><tbody id="rules"></tbody></table>
+        </div>
+      </section>
+      <section id="view-twin" role="tabpanel" aria-labelledby="tab-twin" style="display:none;gap:10px;grid-auto-flow:row">
+        <div class="card priv">
+          <h2>Réplica 3D de la cabina</h2>
+          <p>Cada figura de Lego es genérica: representa una posición ocupada, no a una persona. Al servicio solo llegan identificadores como <span class="mono">S04-L1</span> o <span class="mono">P05</span>; las imágenes se procesan y descartan en el bus.</p>
+        </div>
+        <div class="card">
+          <h2>Ocupación <span id="stateBadge" class="pill"></span></h2>
+          <div class="meter" aria-hidden="true"><i id="meter" style="width:0"></i></div>
+          <dl class="kv" id="counts"></dl>
+          <p class="muted" id="freshNote"></p>
+        </div>
+        <div class="card">
+          <h2>Origen y escenario</h2>
+          <div class="field"><label for="scenario">Escenario simulado</label>
+            <select id="scenario"><option value="calm">Poca gente</option><option value="normal" selected>Hora normal</option><option value="peak">Hora pico</option><option value="over">Sobrecupo</option></select></div>
+          <div class="row"><label><input type="checkbox" id="blind"> Cámaras sin señal</label></div>
+          <details style="margin-top:8px"><summary>Conectar al servicio real</summary>
+            <p class="muted">Lee <span class="mono">/api/v1/buses/{id}/cabin</span> cada 3 s con una sesión de invitado. Si la página no está en el mismo origen que la API, esta debe permitir CORS.</p>
+            <div class="field"><label for="apiBase">URL base (vacía = mismo origen)</label><input id="apiBase" placeholder="https://api.ejemplo.com" autocomplete="off"></div>
+            <div class="field"><label for="busId">Bus</label><input id="busId" value="2101" autocomplete="off"></div>
+            <div class="row"><button class="btn ghost" id="liveBtn" aria-pressed="false">Usar datos reales</button></div>
+            <p class="muted" id="liveNote"></p>
+          </details>
+        </div>
+        <div class="card">
+          <h2>Entrenamiento de pasajeros de pie</h2>
+          <p class="muted">Las zonas <span class="mono">P02–P09</span> están en el pasillo, entre filas con sillas a ambos lados. Un recorrido guiado pasa por cada una para calibrar la cámara.</p>
+          <div class="row" style="margin:6px 0"><button class="btn" id="trainBtn" aria-pressed="false">Iniciar recorrido</button><button class="btn ghost" id="trainNext">Siguiente zona</button></div>
+          <p id="trainText" class="muted">Recorrido detenido.</p>
+        </div>
+        <div class="card">
+          <h2>Leyenda y vista</h2>
+          <div class="legend" id="legend"></div>
+          <div class="row" style="margin-top:8px">
+            <button class="btn ghost" id="idsBtn" aria-pressed="false">Identificar figuras</button>
+            <button class="btn ghost" id="codesBtn" aria-pressed="false">Códigos de sillas</button>
+            <button class="btn ghost" id="camsBtn" aria-pressed="false">Cobertura de cámaras</button>
+            <button class="btn ghost" id="topBtn">Vista superior</button>
+            <button class="btn ghost" id="isoBtn">Vista 3D</button>
+          </div>
+        </div>
+        <div class="card"><details><summary>Último dato recibido (formato del servicio)</summary><pre id="payload" class="mono"></pre></details></div>
+      </section>
+    </aside>
+  </div>
+</div>
+<script src="three.min.js"></script><!-- three.js r128 (MIT), servido desde este mismo sitio: no depende de ninguna CDN -->
+<script>
+(function () {
+'use strict';
+var $ = function (id) { return document.getElementById(id); };
+var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+var MM = 0.01;               // 1 unit = 100 mm: the scene is the physical model (720 x 166 x 130 mm) at true size
+var reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ------------------------------------------------------------------ cabin layout (same as edge/maqueta/make_cut_files.py) */
+var INNER_W = 160, DOUBLE_W = 61, AISLE = 38, LEN = 714, WALL_H = 130, DOOR_H = 70, SEAT_H = 14, BACK_H = 34;
+var FRONT_DOOR = [11, 81], REAR_DOOR = [545, 607], BENCH_X = 616;
+function buildLayout() {
+  var starts = [54], i, items = [];
+  for (i = 0; i < 8; i++) starts.push(108 + i * 54);
+  starts.push(540);
+  starts.forEach(function (start, k) {
+    var row = k + 1, off = row === 1 ? 2 : row === 10 ? 20 : 10;
+    var sides = (row === 1 || row === 10) ? ['L'] : ['R', 'L'];
+    sides.forEach(function (side) {
+      [1, 2].forEach(function (n) {
+        var o = (n - 1) * 31, y = side === 'R' ? o : INNER_W - 30 - o;
+        items.push({ id: 'S' + pad(row) + '-' + side + n, kind: 'seat', row: row, x: start + off, y: y, w: 30, h: 30 });
+      });
+    });
+    if (row >= 2 && row <= 9) items.push({ id: 'P' + pad(row), kind: 'stand', row: row, x: start + 8, y: DOUBLE_W + 4, w: 42, h: AISLE - 8 });
+  });
+  for (i = 1; i <= 5; i++) items.push({ id: 'S11-T' + i, kind: 'seat', row: 11, x: BENCH_X, y: 2 + (i - 1) * 31.2 + 0.6, w: 30, h: 30, bench: true });
+  return items;
+}
+var ITEMS = buildLayout();
+var SEATS = ITEMS.filter(function (p) { return p.kind === 'seat'; });
+var STANDS = ITEMS.filter(function (p) { return p.kind === 'stand'; });
+var BYID = {}; ITEMS.forEach(function (p) { BYID[p.id] = p; });
+var CAPACITY = SEATS.length + STANDS.length;            // 41 + 8 = 49
+var OOP_SPOTS = [[30, 30], [60, 30], [40, 80], [75, 80], [560, 35], [590, 35], [572, 80], [596, 80]];   // doorways and aisle ends: no position id
+function V(xmm, ymm, y) { return new THREE.Vector3(xmm * MM, y || 0, (ymm - INNER_W / 2) * MM); }
+
+/* ------------------------------------------------------------------ renderer, themes, labels, orbit */
+var stage = $('stage'), canvas = $('gl'), labelsEl = $('labels'), tip = $('tip');
+var renderer = null;
+try {
+  renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: false });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+} catch (e) { $('nogl').hidden = false; canvas.hidden = true; $('hint').hidden = true; }
+
+var themed = [];   // [{ set: function(cssColorString) , v: '--var' }]
+function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function bindTheme(v, setter) { themed.push({ v: v, set: setter }); setter(cssVar(v)); }
+function themedMaterial(mat, v) { bindTheme(v, function (c) { mat.color.set(c); }); return mat; }
+function applyTheme() { themed.forEach(function (t) { t.set(cssVar(t.v)); }); }
+if (window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () { setTimeout(applyTheme, 0); });
+new MutationObserver(function () { setTimeout(applyTheme, 0); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+function Bundle(name, orbit) {
+  this.name = name;
+  this.scene = new THREE.Scene();
+  this.camera = new THREE.PerspectiveCamera(40, 1, 0.1, 200);
+  this.o = Object.assign({ theta: 0.6, phi: 1.0, dist: 20, tx: 0, ty: 0, tz: 0 }, orbit);
+  this.goal = Object.assign({}, this.o);
+  this.labels = []; this.pick = []; this.tick = [];
+  var scene = this.scene;
+  bindTheme('--canvas', function (c) { scene.background = new THREE.Color(c); });
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x8a94a3, 0.85));
+  var sun = new THREE.DirectionalLight(0xffffff, 0.8); sun.position.set(6, 14, 8); scene.add(sun);
+}
+Bundle.prototype.label = function (html, pos, cls) {
+  var el = document.createElement('div'); el.className = 'lbl ' + (cls || ''); el.innerHTML = html; el.hidden = true; labelsEl.appendChild(el);
+  var l = { el: el, pos: pos, bundle: this }; this.labels.push(l); return l;
+};
+Bundle.prototype.place = function (dt) {
+  var o = this.o, g = this.goal, k = reduceMotion ? 1 : Math.min(1, dt * 6);
+  ['theta', 'phi', 'dist', 'tx', 'ty', 'tz'].forEach(function (p) { o[p] += (g[p] - o[p]) * k; });
+  var s = Math.sin(o.phi);
+  this.camera.position.set(o.tx + o.dist * s * Math.sin(o.theta), o.ty + o.dist * Math.cos(o.phi), o.tz + o.dist * s * Math.cos(o.theta));
+  this.camera.lookAt(o.tx, o.ty, o.tz);
+};
+var arch = new Bundle('arch', { theta: 0.3, phi: 1.0, dist: 27 });
+var twin = new Bundle('twin', { theta: 0.5, phi: 0.9, dist: 8.2, tx: 3.6, ty: 0.1, tz: 0 });
+var current = arch;
+
+function setLabelsVisible(b) { labelsEl.querySelectorAll('.lbl').forEach(function (e) { e.hidden = true; }); b.labels.forEach(function (l) { l.el.dataset.on = '1'; }); }
+function projectLabels(b, w, h) {
+  var v = new THREE.Vector3();
+  b.labels.forEach(function (l) {
+    if (l.hidden) { l.el.hidden = true; return; }
+    v.copy(l.pos).project(b.camera);
+    if (v.z > 1 || v.z < -1) { l.el.hidden = true; return; }
+    l.el.hidden = false;
+    l.el.style.left = ((v.x + 1) / 2 * w).toFixed(1) + 'px';
+    l.el.style.top = ((1 - v.y) / 2 * h).toFixed(1) + 'px';
+  });
+}
+
+var pointers = {}, pinch = 0, downAt = null, moved = 0, hoverCb = null, clickCb = null;
+canvas.addEventListener('pointerdown', function (e) {
+  canvas.setPointerCapture(e.pointerId); pointers[e.pointerId] = { x: e.clientX, y: e.clientY };
+  downAt = { x: e.clientX, y: e.clientY }; moved = 0; canvas.classList.add('drag');
+  var ids = Object.keys(pointers); if (ids.length === 2) { var a = pointers[ids[0]], b = pointers[ids[1]]; pinch = Math.hypot(a.x - b.x, a.y - b.y); }
+});
+canvas.addEventListener('pointermove', function (e) {
+  var p = pointers[e.pointerId];
+  if (!p) { if (hoverCb) hoverCb(e); return; }
+  var ids = Object.keys(pointers), g = current.goal;
+  if (ids.length === 2) {
+    var a = pointers[ids[0]], b = pointers[ids[1]]; if (e.pointerId == ids[0]) a = { x: e.clientX, y: e.clientY }; else b = { x: e.clientX, y: e.clientY };
+    var d = Math.hypot(a.x - b.x, a.y - b.y); if (pinch) g.dist = clamp(g.dist * pinch / d, current.minD, current.maxD); pinch = d;
+  } else {
+    g.theta -= (e.clientX - p.x) * 0.006; g.phi = clamp(g.phi - (e.clientY - p.y) * 0.006, 0.12, 1.5);
+    current.o.theta = g.theta; current.o.phi = g.phi;
+    moved += Math.abs(e.clientX - p.x) + Math.abs(e.clientY - p.y);
+  }
+  pointers[e.pointerId] = { x: e.clientX, y: e.clientY };
+});
+function endPointer(e) {
+  if (!pointers[e.pointerId]) return; delete pointers[e.pointerId]; pinch = 0;
+  if (!Object.keys(pointers).length) { canvas.classList.remove('drag'); if (downAt && moved < 6 && clickCb) clickCb(e); downAt = null; }
+}
+canvas.addEventListener('pointerup', endPointer); canvas.addEventListener('pointercancel', endPointer);
+canvas.addEventListener('pointerleave', function () { tip.hidden = true; });
+canvas.addEventListener('wheel', function (e) { e.preventDefault(); current.goal.dist = clamp(current.goal.dist * Math.exp(e.deltaY * 0.001), current.minD, current.maxD); }, { passive: false });
+function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+arch.minD = 8; arch.maxD = 40; twin.minD = 2.5; twin.maxD = 22;
+
+var ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+function pickAt(e, b, list) {
+  var r = canvas.getBoundingClientRect(); ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, b.camera); var hit = ray.intersectObjects(list || b.pick, false)[0]; return hit ? hit.object : null;
+}
+
+/* ------------------------------------------------------------------ ARCHITECTURE scene */
+var NODES = {
+  front: { name: 'Front', tech: 'Next.js · TypeScript · MapLibre', pos: [-7.5, 0, 0], color: '#5b7ea6',
+    role: 'MoveIU en el navegador: mapa en vivo, lista de buses, plano de la cabina y esta réplica 3D. Habla solo con el back: REST por HTTPS y WebSocket (WSS) con reconexión y respaldo por sondeo.',
+    stack: [['Next.js 16 + React 19', 'MIT'], ['TypeScript', 'Apache-2.0'], ['MapLibre GL 6', 'BSD-3-Clause'], ['Zustand', 'MIT'], ['Three.js (esta vista 3D)', 'MIT']],
+    v7: 'v7 usaba React Native + Mapbox (propietario). Ahora es una web instalable (PWA) con mapa abierto; el celular nativo es opcional (Capacitor).',
+    note: 'Vercel, donde se aloja, es una plataforma propietaria; el código sigue siendo portable (next start o contenedor).' },
+  back: { name: 'Back', tech: 'FastAPI · Python 3.11', pos: [0, 0, 0], color: '#3f5f8a',
+    role: 'Único punto de entrada. Autentica (JWT), recibe la telemetría del bus, calcula ocupación y alertas, sirve REST y WebSocket y expone las herramientas de solo lectura de la IA.',
+    stack: [['FastAPI + Pydantic', 'MIT'], ['Uvicorn', 'BSD-3-Clause'], ['psycopg 3 (PostgreSQL)', 'LGPL-3.0'], ['PyJWT', 'MIT'], ['redis-py (habla con Valkey)', 'MIT']],
+    v7: 'v7 pedía FastAPI para el tiempo real y un núcleo aparte; aquí es un solo servicio Python con los algoritmos probados (862 pruebas).',
+    note: 'Sin estado propio: puede escalar a varias réplicas porque todo el estado vive en DB y NoDB. En Vercel, los WebSocket están en beta y se cierran al llegar a maxDuration.' },
+  db: { name: 'DB', tech: 'PostgreSQL · PostGIS · Timescale', pos: [7.5, 0, -5.6], color: '#4b7d6e',
+    role: 'Datos duraderos: cuentas, rutas, paradas, auditorías e histórico de lecturas por tiempo y por posición geográfica.',
+    stack: [['PostgreSQL 16', 'PostgreSQL License'], ['PostGIS', 'GPL-2.0+'], ['TimescaleDB', 'Apache-2.0 + licencia TSL (algunas funciones)']],
+    v7: 'Igual que v7 (PostgreSQL + PostGIS + TimescaleDB), con migraciones versionadas.',
+    note: 'Parte de TimescaleDB usa la licencia TSL, que no es aprobada por la OSI; no se pudo verificar aquí. Alternativa 100 % abierta: particionado nativo con pg_partman y pg_cron.' },
+  nodb: { name: 'NoDB', tech: 'Valkey 8 (compatible con Redis)', pos: [7.5, 0, 0], color: '#8a7040',
+    role: 'Estado en vivo de cada bus, copia de la cabina (60 s), pub/sub, límites de tasa e índices de alertas. Es lo que lee el WebSocket en cada réplica.',
+    stack: [['Valkey 8', 'BSD-3-Clause'], ['redis-py', 'MIT']],
+    v7: 'v7 usaba Redis, cuya licencia actual ya no es de código abierto OSI; Valkey es el fork abierto con el mismo protocolo. Kafka se reemplaza por pub/sub de Valkey (NATS opcional).',
+    note: 'Si se pierde, los buses repoblan el estado en pocos segundos; nada que no pueda reconstruirse vive solo aquí.' },
+  ai: { name: 'AI', tech: 'LLM abierto · detector YOLO', pos: [7.5, 0, 5.6], color: '#76608a',
+    role: 'Dos piezas: detector de personas en la Raspberry (solo emite posiciones ocupadas) y un LLM abierto central que, por herramientas de solo lectura del back, analiza flota y propone hallazgos.',
+    stack: [['vLLM u Ollama (API compatible con OpenAI)', 'Apache-2.0 / MIT'], ['Modelos Qwen, Gemma o Mistral', 'Apache-2.0 según cada tarjeta de modelo'], ['YOLOv8n (ONNX) en el borde', 'AGPL-3.0'], ['MLflow', 'Apache-2.0']],
+    v7: 'v7 llamaba a un modelo propietario por API. Ahora el proveedor es configurable y por defecto abierto; Claude u otro queda opcional.',
+    note: 'Para las figuras de Lego de la maqueta se necesita un detector entrenado con ellas. YOLOv8 es AGPL: no se distribuyen sus pesos en el repositorio; evalúe YOLOX o RT-DETR si necesita licencia permisiva. Llama no es OSI-abierto. La calidad de los modelos abiertos con herramientas no se probó aquí. Si la IA falla, hay reglas de respaldo.' },
+  edge: { name: 'Bus (borde)', tech: 'Arduino · Raspberry Pi', pos: [-7.5, 0, 6], color: '#6c7787', small: true,
+    role: 'Cuenta pasajeros con FC-51 en las dos puertas y estima la ocupación con la visión (en la maqueta, minifiguras de Lego). Envía al back solo conteos y los identificadores de posición ocupada; las imágenes no salen del bus.',
+    stack: [['Agente Python (bus_edge)', 'del proyecto'], ['OpenCV (headless)', 'Apache-2.0'], ['ONNX Runtime', 'MIT'], ['pyserial', 'BSD-3-Clause'], ['Firmware Arduino', 'del proyecto']],
+    v7: 'Igual que v7 (RF-6): puertas por sensor, cámaras por visión, GPS por NMEA, y buffer SQLite si no hay red.',
+    note: 'Probado con simuladores; la maqueta física y las cámaras reales aún no se han calibrado. Un detector entrenado con personas no reconoce de forma fiable una minifigura de Lego: hace falta un modelo propio (edge/docs/lego.md).' }
+};
+var EDGES = [
+  { a: 'front', b: 'back', label: 'HTTPS · WSS', both: true },
+  { a: 'edge', b: 'back', label: 'telemetría + IDs de posición' },
+  { a: 'back', b: 'db', label: 'SQL · pool pequeño' },
+  { a: 'back', b: 'nodb', label: 'RESP · vivo y pub/sub' },
+  { a: 'back', b: 'ai', label: 'API OpenAI-compatible' }
+];
+var RULES = [['Front → Back', 'permitido'], ['Edge → Back', 'permitido'], ['Back → DB, NoDB, AI', 'permitido'],
+  ['Front → DB / NoDB / AI', 'prohibido'], ['AI → DB / NoDB directo', 'prohibido (solo herramientas del back)'], ['Edge → DB / NoDB', 'prohibido']];
+var SIM = [
+  { a: 'edge', b: 'back', t: 'El bus envía su lectura: <span class="mono">POST /internal/buses/2101/telemetry</span> con la clave de ingesta. Solo conteos e IDs de posición.' },
+  { a: 'back', b: 'nodb', t: 'El back valida y guarda el estado vivo y la cabina (60 s) en Valkey.' },
+  { a: 'back', b: 'db', t: 'El back guarda la lectura en el histórico (TimescaleDB).' },
+  { a: 'front', b: 'back', t: 'El navegador del pasajero pide la ruta: WebSocket <span class="mono">subscribe C1</span> o <span class="mono">GET /buses/active</span>.' },
+  { a: 'back', b: 'nodb', t: 'El back lee el estado vivo de la ruta en una sola lectura.' },
+  { a: 'back', b: 'front', t: 'El back responde con <span class="mono">snapshot</span> o <span class="mono">delta</span>; el mapa se actualiza.' },
+  { a: 'back', b: 'ai', t: 'Cada tanto, un trabajo programado consulta a la IA con herramientas de solo lectura; el hallazgo vuelve al back y se guarda en DB.' }
+];
+
+var nodeMesh = {}, nodeLabel = {}, edgeObjs = [], selectedNode = null, hoverNode = null;
+(function buildArchitecture() {
+  var s = arch.scene;
+  var ground = new THREE.Mesh(new THREE.PlaneGeometry(40, 26), themedMaterial(new THREE.MeshStandardMaterial({ roughness: 1 }), '--floor'));
+  ground.rotation.x = -Math.PI / 2; ground.position.y = -0.02; s.add(ground);
+  var grid = new THREE.GridHelper(40, 40, 0x7b8798, 0x7b8798); grid.material.transparent = true; grid.material.opacity = 0.18; s.add(grid);
+  Object.keys(NODES).forEach(function (id) {
+    var n = NODES[id], g, mat = new THREE.MeshStandardMaterial({ color: n.color, roughness: 0.55, metalness: 0.05, emissive: 0x000000 });
+    if (id === 'db') { g = new THREE.Group(); for (var i = 0; i < 3; i++) { var d = new THREE.Mesh(new THREE.CylinderGeometry(1.25, 1.25, 0.5, 40), mat); d.position.y = 0.3 + i * 0.58; g.add(d); } }
+    else if (id === 'nodb') { g = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 1.1, 6), mat); g.position.y = 0.55; }
+    else if (id === 'ai') { g = new THREE.Mesh(new THREE.IcosahedronGeometry(1.25, 0), mat); g.position.y = 1.35; }
+    else if (id === 'front') { g = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.3, 0.35), mat); g.position.y = 1.0; g.rotation.x = -0.18; }
+    else if (id === 'edge') { g = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.7, 0.9), mat); g.position.y = 0.4; }
+    else { g = new THREE.Mesh(new THREE.BoxGeometry(3.6, 1.5, 2.8), mat); g.position.y = 0.8; }
+    g.position.x = n.pos[0]; g.position.z = n.pos[2];
+    var plate = new THREE.Mesh(new THREE.BoxGeometry(n.small ? 3 : 4.2, 0.08, n.small ? 2 : 3.4), new THREE.MeshStandardMaterial({ color: 0x9aa6b6, roughness: 0.9, transparent: true, opacity: 0.55 }));
+    plate.position.set(n.pos[0], 0.02, n.pos[2]); s.add(plate);
+    s.add(g); nodeMesh[id] = { obj: g, mat: mat, base: g.position.y };
+    var targets = g.isGroup ? g.children : [g]; targets.forEach(function (m) { m.userData.node = id; arch.pick.push(m); });
+    nodeLabel[id] = arch.label('<b>' + n.name + '</b><small>' + n.tech + '</small>', (id === 'ai' ? new THREE.Vector3(n.pos[0], 0.3, n.pos[2] + 2.3) : new THREE.Vector3(n.pos[0], (id === 'db' ? 2.4 : id === 'front' ? 2.2 : id === 'back' ? 2.5 : 1.6), n.pos[2])));
+  });
+  EDGES.forEach(function (e) {
+    var A = new THREE.Vector3(NODES[e.a].pos[0], 0.25, NODES[e.a].pos[2]), B = new THREE.Vector3(NODES[e.b].pos[0], 0.25, NODES[e.b].pos[2]);
+    var dir = B.clone().sub(A), len = dir.length(), mid = A.clone().add(B).multiplyScalar(0.5);
+    var tube = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, len, 8), new THREE.MeshBasicMaterial({ color: 0x7b8798 }));
+    tube.position.copy(mid); tube.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize()); s.add(tube);
+    var lab = arch.label(e.label, mid.clone().setY(0.7)); lab.el.style.fontSize = '10.5px'; lab.el.style.color = 'var(--muted)';
+    function arrow(from, to) {
+      var d2 = to.clone().sub(from).normalize(), cone = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.55, 14), new THREE.MeshBasicMaterial({ color: 0x7b8798 }));
+      cone.position.copy(from.clone().add(to).multiplyScalar(0.5)); cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d2); s.add(cone);
+    }
+    arrow(A.clone().lerp(B, 0.5), A.clone().lerp(B, 0.74));
+    if (e.both) arrow(A.clone().lerp(B, 0.5), A.clone().lerp(B, 0.26));
+    edgeObjs.push({ e: e, A: A, B: B, tube: tube });
+  });
+  var packet = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 12), new THREE.MeshBasicMaterial({ color: 0xe0a23a }));
+  packet.visible = false; s.add(packet); arch.packet = packet;
+})();
+
+var sim = { on: false, i: -1, t: 0, dur: reduceMotion ? 0.6 : 1.5, done: false };
+function edgeFor(a, b) { for (var i = 0; i < edgeObjs.length; i++) { var o = edgeObjs[i]; if ((o.e.a === a && o.e.b === b) || (o.e.a === b && o.e.b === a)) return o; } }
+arch.tick.push(function (dt, time) {
+  Object.keys(nodeMesh).forEach(function (id) {
+    var m = nodeMesh[id], active = sim.on && sim.i >= 0 && (SIM[sim.i].a === id || SIM[sim.i].b === id);
+    var lit = active ? 0.22 : (selectedNode === id ? 0.08 : hoverNode === id ? 0.05 : 0);
+    m.mat.emissive.setRGB(lit, lit, lit); m.obj.position.y = m.base + (selectedNode === id ? 0.08 * Math.sin(time * 3) : 0);
+    if (id === 'ai') m.obj.rotation.y += dt * 0.3;
+  });
+  if (!sim.on || sim.i < 0) { arch.packet.visible = false; return; }
+  sim.t += dt / sim.dur;
+  var st = SIM[sim.i], eo = edgeFor(st.a, st.b), A = new THREE.Vector3(NODES[st.a].pos[0], 0.45, NODES[st.a].pos[2]), B = new THREE.Vector3(NODES[st.b].pos[0], 0.45, NODES[st.b].pos[2]);
+  arch.packet.visible = true; arch.packet.position.lerpVectors(A, B, clamp(sim.t, 0, 1));
+  if (sim.t >= 1) { sim.t = 0; sim.i++; if (sim.i >= SIM.length) { sim.on = false; sim.i = -1; sim.done = true; arch.packet.visible = false; $('simBtn').disabled = false; } renderSteps(); }
+});
+
+function renderSteps() {
+  var ol = $('simSteps'); ol.innerHTML = '';
+  if (!sim.on && !sim.done) { $('simReset').hidden = true; return; }
+  SIM.forEach(function (st, i) { var li = document.createElement('li'); li.innerHTML = st.t; li.className = sim.done || i < sim.i ? 'done' : i === sim.i ? 'on' : ''; ol.appendChild(li); });
+  $('simReset').hidden = false;
+}
+$('simBtn').onclick = function () { sim.on = true; sim.i = 0; sim.t = 0; sim.done = false; this.disabled = true; renderSteps(); };
+$('simReset').onclick = function () { sim.on = false; sim.i = -1; sim.done = false; $('simBtn').disabled = false; renderSteps(); };
+
+function showNode(id) {
+  selectedNode = id; var n = NODES[id];
+  Object.keys(nodeLabel).forEach(function (k) { nodeLabel[k].el.classList.toggle('sel', k === id); });
+  Array.prototype.forEach.call($('nodeBtns').children, function (b) { b.setAttribute('aria-pressed', b.dataset.id === id ? 'true' : 'false'); });
+  var stack = n.stack.map(function (r) { return '<tr><td>' + r[0] + '</td><td class="muted">' + r[1] + '</td></tr>'; }).join('');
+  $('detail').innerHTML = '<h2>' + n.name + ' <span class="muted" style="font-weight:400">· ' + n.tech + '</span></h2><p>' + n.role + '</p>' +
+    '<h3>Piezas y licencias</h3><table class="rules"><tbody>' + stack + '</tbody></table>' +
+    '<h3>Cambio frente a v7</h3><p>' + n.v7 + '</p><h3>Ojo</h3><p class="muted">' + n.note + '</p>';
+  var o = arch.goal, p = n.pos; o.tx = p[0] * 0.5; o.tz = p[2] * 0.4;
+}
+(function buildArchPanel() {
+  Object.keys(NODES).forEach(function (id) { var b = document.createElement('button'); b.className = 'btn ghost'; b.dataset.id = id; b.textContent = NODES[id].name; b.setAttribute('aria-pressed', 'false'); b.onclick = function () { showNode(id); }; $('nodeBtns').appendChild(b); });
+  $('rules').innerHTML = RULES.map(function (r) { var bad = r[1].indexOf('prohibido') === 0; return '<tr><td>' + r[0] + '</td><td style="color:var(--' + (bad ? 'bad' : 'ok') + ');font-weight:600">' + (bad ? '✗ ' : '✓ ') + r[1] + '</td></tr>'; }).join('');
+  showNode('back'); arch.goal.tx = 0; arch.goal.tz = 0;
+})();
+arch.hover = function (e) { var h = pickAt(e, arch); hoverNode = h ? h.userData.node : null; canvas.style.cursor = h ? 'pointer' : ''; };
+arch.click = function (e) { var h = pickAt(e, arch); if (h) showNode(h.userData.node); };
+
+/* ------------------------------------------------------------------ TWIN scene: the model bus with LEGO minifigures */
+var COL = { seated: 0x4f77a8, standing: 0x3f8c7e, oop: 0xc0872c, trainer: 0x7a5ea0, entry: 0x2a7566, exit: 0xa1443b, head: 0xd8b24a, legs: 0x34404f };
+var seatMeshes = {}, zoneMeshes = {}, figures = {}, oopFigs = [], codeLabels = [], camOverlays = [], trainerFig = null;
+var codesOn = false, camsOn = false, idsOn = false, pickFigs = [];
+var K = 0.01;   // mm -> scene units
+
+function box(w, h, d, mat, x, y, z) { var m = new THREE.Mesh(new THREE.BoxGeometry(w * K, h * K, d * K), mat); m.position.set(x * K, y * K, z * K); m.castShadow = true; return m; }
+function cyl(r, h, mat, x, y, z, seg) { var m = new THREE.Mesh(new THREE.CylinderGeometry(r * K, r * K, h * K, seg || 20), mat); m.position.set(x * K, y * K, z * K); m.castShadow = true; return m; }
+
+/* A LEGO minifigure at true size (about 40 mm). Faces -x (the front of the bus). Dimensions in mm. */
+function makeFigure(color, standing, pid) {
+  var holder = new THREE.Group(), g = new THREE.Group(); holder.add(g);
+  var shirt = new THREE.MeshStandardMaterial({ color: color, roughness: 0.55 }), skin = new THREE.MeshStandardMaterial({ color: COL.head, roughness: 0.4 }), legs = new THREE.MeshStandardMaterial({ color: COL.legs, roughness: 0.6 });
+  var parts = [];
+  if (standing) {
+    parts.push(box(7.6, 15.5, 7, legs, 0, 7.75, -4), box(7.6, 15.5, 7, legs, 0, 7.75, 4), box(8, 4, 16, legs, 0, 17.5, 0));
+    parts.push(box(8, 12, 16, shirt, 0, 25.5, 0));
+    parts.push(box(4, 11, 4, shirt, 0, 25, -10), box(4, 11, 4, shirt, 0, 25, 10));
+    parts.push(cyl(2.1, 3, skin, 0, 18.5, -10, 12), cyl(2.1, 3, skin, 0, 18.5, 10, 12));
+    parts.push(cyl(4.8, 7.5, skin, 0, 34.8, 0, 24), cyl(1.9, 1.7, skin, 0, 39.4, 0, 14));
+  } else {
+    parts.push(box(15, 7.5, 7, legs, -8, 18, -4), box(15, 7.5, 7, legs, -8, 18, 4), box(8, 4, 16, legs, 4, 16, 0));
+    parts.push(box(8, 12, 16, shirt, 4, 24, 0));
+    parts.push(box(4, 11, 4, shirt, 4, 24, -10), box(4, 11, 4, shirt, 4, 24, 10));
+    parts.push(cyl(2.1, 3, skin, 0, 20, -10, 12), cyl(2.1, 3, skin, 0, 20, 10, 12));
+    parts.push(cyl(4.8, 7.5, skin, 4, 33.8, 0, 24), cyl(1.9, 1.7, skin, 4, 38.4, 0, 14));
+  }
+  parts.forEach(function (m) { m.userData.pid = pid; m.userData.fig = true; g.add(m); pickFigs.push(m); });
+  holder.userData.mats = [shirt, skin, legs]; holder.userData.parts = parts;
+  return holder;
+}
+function figureAt(group, mmx, mmy, yBase) { group.position.copy(V(mmx, mmy, (yBase || 0) * K)); return group; }
+
+function seatTexture(text, color) {
+  var c = document.createElement('canvas'); c.width = 160; c.height = 80; var x = c.getContext('2d');
+  x.fillStyle = color || '#ffffff'; x.font = '600 38px "IBM Plex Mono", monospace'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(text, 80, 42);
+  var t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t;
+}
+function dashedRect(w, d, color) {
+  var pts = [new THREE.Vector3(-w / 2, 0, -d / 2), new THREE.Vector3(w / 2, 0, -d / 2), new THREE.Vector3(w / 2, 0, d / 2), new THREE.Vector3(-w / 2, 0, d / 2), new THREE.Vector3(-w / 2, 0, -d / 2)];
+  var l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineDashedMaterial({ color: color, dashSize: 0.06, gapSize: 0.04 })); l.computeLineDistances(); return l;
+}
+function outline(w, d, color) {
+  var pts = [new THREE.Vector3(-w / 2, 0, -d / 2), new THREE.Vector3(w / 2, 0, -d / 2), new THREE.Vector3(w / 2, 0, d / 2), new THREE.Vector3(-w / 2, 0, d / 2), new THREE.Vector3(-w / 2, 0, -d / 2)];
+  return new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: color, transparent: true, opacity: 0.55 }));
+}
+
+(function buildCabin() {
+  var s = twin.scene, L = LEN * K, Wd = INNER_W * K;
+  if (renderer) { renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; }
+  var sun = twin.scene.children[twin.scene.children.length - 1];   // directional light of the bundle
+  sun.position.set(4, 9, 5); sun.target.position.set(3.6, 0, 0); s.add(sun.target); sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048); sun.shadow.camera.left = -6; sun.shadow.camera.right = 6; sun.shadow.camera.top = 4; sun.shadow.camera.bottom = -4; sun.shadow.camera.near = 1; sun.shadow.camera.far = 20; sun.shadow.bias = -0.0008;
+
+  /* base board (where the model sits) and the engraved floor */
+  var baseBoard = new THREE.Mesh(new THREE.BoxGeometry(7.9, 0.09, 2.5), themedMaterial(new THREE.MeshStandardMaterial({ roughness: 1 }), '--board')); baseBoard.position.set(3.57, -0.075, 0); baseBoard.receiveShadow = true; s.add(baseBoard);
+  var floor = new THREE.Mesh(new THREE.BoxGeometry(L, 0.03, Wd), themedMaterial(new THREE.MeshStandardMaterial({ roughness: 0.95 }), '--floor'));
+  floor.position.set(L / 2, -0.015, 0); floor.receiveShadow = true; s.add(floor);
+  var pad = new THREE.Mesh(new THREE.PlaneGeometry(60, 40), themedMaterial(new THREE.MeshBasicMaterial(), '--canvas')); pad.rotation.x = -Math.PI / 2; pad.position.y = -0.125; s.add(pad);
+
+  /* walls: translucent, 130 mm high; the right wall (doors) has two openings */
+  var wallMat = themedMaterial(new THREE.MeshStandardMaterial({ roughness: 0.8, transparent: true, opacity: 0.34, depthWrite: false }), '--wall');
+  var railMat = themedMaterial(new THREE.MeshStandardMaterial({ roughness: 0.7 }), '--wallrail');
+  var zl = Wd / 2 + 0.015, zr = -Wd / 2 - 0.015;
+  function wall(x0, x1, z, h) {
+    var m = new THREE.Mesh(new THREE.BoxGeometry((x1 - x0) * K, h * K, 0.03), wallMat); m.position.set((x0 + x1) / 2 * K, h * K / 2, z); s.add(m);
+    var r = new THREE.Mesh(new THREE.BoxGeometry((x1 - x0) * K, 0.03, 0.04), railMat); r.position.set((x0 + x1) / 2 * K, h * K, z); s.add(r);
+  }
+  wall(0, LEN, zl, WALL_H);
+  wall(0, FRONT_DOOR[0], zr, WALL_H); wall(FRONT_DOOR[1], REAR_DOOR[0], zr, WALL_H); wall(REAR_DOOR[1], LEN, zr, WALL_H);
+  [0, LEN].forEach(function (x) { var m = new THREE.Mesh(new THREE.BoxGeometry(0.03, WALL_H * K, Wd + 0.06), wallMat); m.position.set(x * K, WALL_H * K / 2, 0); s.add(m); });
+  /* lintels over the doors */
+  [FRONT_DOOR, REAR_DOOR].forEach(function (d) { var m = new THREE.Mesh(new THREE.BoxGeometry((d[1] - d[0]) * K, (WALL_H - DOOR_H) * K, 0.03), wallMat); m.position.set((d[0] + d[1]) / 2 * K, (DOOR_H + (WALL_H - DOOR_H) / 2) * K, zr); s.add(m); });
+
+  /* doors: green entry at the front, red exit at the back */
+  function door(range, color, name, sub) {
+    var x0 = range[0] * K, x1 = range[1] * K, mat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.5 });
+    [x0, x1].forEach(function (x) { var p = new THREE.Mesh(new THREE.BoxGeometry(0.035, DOOR_H * K, 0.05), mat); p.position.set(x, DOOR_H * K / 2, zr); s.add(p); });
+    var lin = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0 + 0.035, 0.035, 0.05), mat); lin.position.set((x0 + x1) / 2, DOOR_H * K, zr); s.add(lin);
+    var m = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, 0.42), new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.32 })); m.rotation.x = -Math.PI / 2; m.position.set((x0 + x1) / 2, 0.004, zr + 0.2); s.add(m);
+    var sh = new THREE.Shape(); sh.moveTo(0, 0.14); sh.lineTo(0.15, -0.07); sh.lineTo(-0.15, -0.07); sh.lineTo(0, 0.14);
+    var ar = new THREE.Mesh(new THREE.ShapeGeometry(sh), new THREE.MeshBasicMaterial({ color: color, side: THREE.DoubleSide })); ar.rotation.x = -Math.PI / 2; ar.position.set((x0 + x1) / 2, 0.006, zr + 0.24);
+    ar.rotation.z = name === 'ENTRADA' ? 0 : Math.PI; s.add(ar);
+    twin.label('<b>' + name + '</b><small>' + sub + '</small>', new THREE.Vector3((x0 + x1) / 2, DOOR_H * K + 0.55, zr), name === 'ENTRADA' ? 'ok' : 'bad');
+  }
+  door(FRONT_DOOR, COL.entry, 'ENTRADA', 'D-FRONT'); door(REAR_DOOR, COL.exit, 'SALIDA', 'D-REAR');
+
+  /* driver's cab and engine bay */
+  var cab = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.34, 0.5), themedMaterial(new THREE.MeshStandardMaterial({ roughness: 0.8 }), '--seatback')); cab.position.set(0.27, 0.17, (INNER_W - 30 - 3) * K - Wd / 2 + 0.1); cab.castShadow = true; s.add(cab);
+  twin.label('<b>Conductor</b>', new THREE.Vector3(0.27, 0.5, (INNER_W - 33) * K - Wd / 2 + 0.1), 'minor');
+  var eng = new THREE.Mesh(new THREE.BoxGeometry((LEN - 649) * K, 0.3, Wd - 0.06), themedMaterial(new THREE.MeshStandardMaterial({ roughness: 0.9 }), '--wall')); eng.position.set((649 + LEN) / 2 * K, 0.15, 0); eng.castShadow = true; s.add(eng);
+  twin.label('<b>Motor</b><small>sin pasajeros</small>', new THREE.Vector3((649 + LEN) / 2 * K, 0.55, 0), 'minor');
+
+  /* aisle: corridor with chevrons showing the walking direction (entry to exit) */
+  var corr = new THREE.Mesh(new THREE.PlaneGeometry((REAR_DOOR[1] - FRONT_DOOR[0]) * K, AISLE * K), new THREE.MeshBasicMaterial({ color: 0x2b4c7e, transparent: true, opacity: 0.12 }));
+  corr.rotation.x = -Math.PI / 2; corr.position.set((REAR_DOOR[1] + FRONT_DOOR[0]) / 2 * K, 0.003, 0); s.add(corr); twin.corridor = corr;
+  var chev = new THREE.Shape(); chev.moveTo(0.1, 0); chev.lineTo(-0.07, 0.12); chev.lineTo(-0.03, 0); chev.lineTo(-0.07, -0.12); chev.lineTo(0.1, 0);
+  function zoneNear(x) { return STANDS.some(function (p) { return x > p.x - 4 && x < p.x + p.w + 4; }); }
+  for (var cx = 30; cx < 600; cx += 22) { if (zoneNear(cx)) continue; var cm = new THREE.Mesh(new THREE.ShapeGeometry(chev), new THREE.MeshBasicMaterial({ color: 0x5b7ea6, transparent: true, opacity: 0.5 })); cm.rotation.x = -Math.PI / 2; cm.position.set(cx * K, 0.005, 0); s.add(cm); }
+  twin.label('<b>Pasillo</b><small>recorrido de entrenamiento</small>', new THREE.Vector3(3.3, 0.04, 0), 'warn minor');
+
+  /* seats: 30 x 30 mm, seat at 14 mm, backrest up to 34 mm; engraved outline on the floor like the real model */
+  var cushion = themedMaterial(new THREE.MeshStandardMaterial({ roughness: 0.85 }), '--seat'), back = themedMaterial(new THREE.MeshStandardMaterial({ roughness: 0.85 }), '--seatback');
+  SEATS.forEach(function (p) {
+    var g = new THREE.Group(), w = p.w * K, d = p.h * K;
+    var c = new THREE.Mesh(new THREE.BoxGeometry(w, 0.03, d * 0.97), cushion); c.position.set(0, SEAT_H * K - 0.015, 0); c.castShadow = true; c.receiveShadow = true; g.add(c);
+    var b = new THREE.Mesh(new THREE.BoxGeometry(0.03, (BACK_H - SEAT_H) * K, d * 0.97), back); b.position.set(w / 2 - 0.015, (BACK_H + SEAT_H) / 2 * K, 0); b.castShadow = true; g.add(b);
+    [-1, 1].forEach(function (sg) { var leg = new THREE.Mesh(new THREE.BoxGeometry(w * 0.82, (SEAT_H - 3) * K, 0.03), back); leg.position.set(0, (SEAT_H - 3) * K / 2, sg * (d / 2 - 0.02)); leg.castShadow = true; g.add(leg); });
+    g.position.set((p.x + p.w / 2) * K, 0, (p.y + p.h / 2 - INNER_W / 2) * K); s.add(g);
+    c.userData.pid = p.id; twin.pick.push(c); seatMeshes[p.id] = c;
+    var o = outline(w, d, 0x6b7787); o.position.set((p.x + p.w / 2) * K, 0.002, (p.y + p.h / 2 - INNER_W / 2) * K); s.add(o);
+  });
+  /* standing zones in the aisle */
+  STANDS.forEach(function (p) {
+    var w = p.w * K, d = p.h * K, cx = (p.x + p.w / 2) * K, cz = (p.y + p.h / 2 - INNER_W / 2) * K;
+    var f = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshBasicMaterial({ color: 0xc9902a, transparent: true, opacity: 0.3, side: THREE.DoubleSide }));
+    f.rotation.x = -Math.PI / 2; f.position.set(cx, 0.005, cz); f.userData.pid = p.id; s.add(f); twin.pick.push(f); zoneMeshes[p.id] = f;
+    var ln = dashedRect(w, d, 0xc9902a); ln.position.set(cx, 0.007, cz); s.add(ln);
+    var t = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.15), new THREE.MeshBasicMaterial({ map: seatTexture(p.id, '#7a5200'), transparent: true }));
+    t.rotation.x = -Math.PI / 2; t.position.set(cx - w / 2 + 0.2, 0.009, cz + d / 2 - 0.09); s.add(t);
+  });
+  /* cameras on arches at both ends, and optional coverage areas (front rows 1-5, rear rows 6-11) */
+  function cam(x, dirSign, name, sub) {
+    var arch = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, Wd), railMat); arch.position.set(x * K, (WALL_H - 8) * K, 0); s.add(arch);
+    var body = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.1, 0.1), new THREE.MeshStandardMaterial({ color: 0x2b3442 })); body.position.set(x * K, (WALL_H - 14) * K, 0); s.add(body);
+    var lens = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.07, 12), new THREE.MeshStandardMaterial({ color: 0x9fb3cc })); lens.rotation.z = Math.PI / 2; lens.position.set(x * K + dirSign * 0.1, (WALL_H - 16) * K, 0); s.add(lens);
+    twin.label('<b>' + name + '</b><small>' + sub + '</small>', new THREE.Vector3(x * K, (WALL_H + 6) * K, 0), 'minor');
+  }
+  cam(12, 1, 'Cámara frontal', 'filas 1–5'); cam(LEN - 8, -1, 'Cámara trasera', 'filas 6–11');
+  [[0, 324, 0x2b4c7e], [324, LEN, 0x2a7566]].forEach(function (r) {
+    var m = new THREE.Mesh(new THREE.PlaneGeometry((r[1] - r[0]) * K - 0.04, Wd - 0.04), new THREE.MeshBasicMaterial({ color: r[2], transparent: true, opacity: 0.12 })); m.rotation.x = -Math.PI / 2; m.position.set((r[0] + r[1]) / 2 * K, 0.001, 0); m.visible = false; s.add(m); camOverlays.push(m);
+  });
+  /* scale bar: 100 mm */
+  var sb = new THREE.Mesh(new THREE.BoxGeometry(1, 0.012, 0.03), new THREE.MeshBasicMaterial({ color: 0x566170 })); sb.position.set(0.6, 0.006, Wd / 2 + 0.55); s.add(sb);
+  twin.label('100 mm', new THREE.Vector3(0.6, 0.05, Wd / 2 + 0.55), 'minor');
+})();
+
+/* ------------------------------------------------------------------ cabin state -> scene */
+var cabin = { occupied: new Set(), counts: null, fresh: true, oop: 0 };
+function attachLabel(g, text, pos) {
+  var l = twin.label(text, pos, 'tag'); l.hidden = !idsOn; g.userData.lbl = l; return l;
+}
+function dropFigure(g) {
+  twin.scene.remove(g);
+  if (g.userData.lbl) { g.userData.lbl.el.remove(); twin.labels.splice(twin.labels.indexOf(g.userData.lbl), 1); }
+  g.userData.parts.forEach(function (m) { var i = pickFigs.indexOf(m); if (i >= 0) pickFigs.splice(i, 1); });
+}
+function figureFor(id) {
+  var p = BYID[id], g;
+  if (p.kind === 'stand') { g = makeFigure(COL.standing, true, id); figureAt(g, p.x + p.w / 2, p.y + p.h / 2, 0); }
+  else { g = makeFigure(COL.seated, false, id); figureAt(g, p.x + p.w / 2, p.y + p.h / 2, 0); g.position.x += 0.04; }
+  g.scale.setScalar(0.001); g.userData.target = 1; twin.scene.add(g);
+  attachLabel(g, id, g.position.clone().add(new THREE.Vector3(0, p.kind === 'stand' ? 0.58 : 0.55, 0)));
+  return g;
+}
+function applyCabin(data) {
+  cabin.fresh = !!data.fresh; cabin.counts = data.counts; cabin.payload = data;
+  var want = new Set(data.fresh ? data.occupied : []); cabin.occupied = want;
+  want.forEach(function (id) { if (BYID[id] && !figures[id]) figures[id] = figureFor(id); if (figures[id]) figures[id].userData.target = 1; });
+  Object.keys(figures).forEach(function (id) { if (!want.has(id)) figures[id].userData.target = 0; });
+  var n = data.fresh ? Math.min(data.counts.standing_out_of_position, OOP_SPOTS.length) : 0;
+  while (oopFigs.length < n) {
+    var sp = OOP_SPOTS[oopFigs.length], g = makeFigure(COL.oop, true, 'fuera de posición'); figureAt(g, sp[0], sp[1], 0); g.scale.setScalar(0.001); g.userData.target = 1;
+    var ring = new THREE.Mesh(new THREE.RingGeometry(0.13, 0.17, 32), new THREE.MeshBasicMaterial({ color: COL.oop, side: THREE.DoubleSide })); ring.rotation.x = -Math.PI / 2; ring.position.y = 0.006; g.add(ring);
+    twin.scene.add(g); oopFigs.push(g); attachLabel(g, 'fuera de posición', g.position.clone().add(new THREE.Vector3(0, 0.58, 0)));
+  }
+  oopFigs.forEach(function (g, i) { g.userData.target = i < n ? 1 : 0; if (g.userData.lbl) g.userData.lbl.hidden = !idsOn || i >= n; });
+  Object.keys(zoneMeshes).forEach(function (id) { zoneMeshes[id].userData.taken = want.has(id); });
+  renderCounts(data);
+  $('payload').textContent = JSON.stringify(Object.assign({}, data, { occupied: data.occupied.slice(0, 12).concat(data.occupied.length > 12 ? ['… +' + (data.occupied.length - 12)] : []) }), null, 1);
+}
+twin.tick.push(function (dt, time) {
+  var k = reduceMotion ? 1 : Math.min(1, dt * 7);
+  function ease(g) { var s = g.scale.x, t = g.userData.target; if (Math.abs(s - t) > 0.002) g.scale.setScalar(Math.max(0.001, s + (t - s) * k)); }
+  Object.keys(figures).forEach(function (id) {
+    var g = figures[id]; ease(g); if (g.userData.lbl) g.userData.lbl.hidden = !idsOn || g.userData.target === 0;
+    if (g.userData.target === 0 && g.scale.x <= 0.01) { dropFigure(g); delete figures[id]; }
+  });
+  oopFigs.forEach(ease);
+  var pulse = training.on ? 0.28 + 0.1 * Math.sin(time * 4) : 0.3;
+  Object.keys(zoneMeshes).forEach(function (id) {
+    var z = zoneMeshes[id], isCur = training.on && training.zone === id;
+    z.material.opacity = isCur ? 0.45 + 0.2 * Math.sin(time * 5) : (training.on ? 0.14 : (z.userData.taken ? 0.16 : pulse));
+  });
+  twin.corridor.material.opacity = training.on ? 0.22 : 0.12;
+  stepTrainer(dt);
+});
+
+/* ------------------------------------------------------------------ counts panel */
+function stateOf(c) {
+  var people = c.people_on_board;
+  if (people > CAPACITY) return ['Sobrecupo', 'bad']; if (c.free_seats === 0 && c.free_standing === 0) return ['Lleno', 'bad'];
+  if (c.free_seats === 0) return ['Solo de pie', 'warn']; return ['Hay sillas', 'ok'];
+}
+function hex(c) { return '#' + ('000000' + c.toString(16)).slice(-6); }
+function renderCounts(d) {
+  var c = d.counts, st = stateOf(c), pct = Math.round(c.people_on_board / CAPACITY * 100);
+  var b = $('stateBadge'); b.textContent = st[0] + ' · ' + pct + '%'; b.style.color = 'var(--' + st[1] + ')';
+  $('meter').style.width = Math.min(100, pct) + '%';
+  function sw(col) { return '<i class="sw" style="background:' + hex(col) + ';display:inline-block;vertical-align:-2px;margin-right:6px"></i>'; }
+  $('counts').innerHTML = [[sw(COL.seated) + 'Figuras sentadas', c.seated + ' / ' + SEATS.length], [sw(COL.standing) + 'De pie en posición', c.standing + ' / ' + STANDS.length], [sw(COL.oop) + 'De pie fuera de posición', c.standing_out_of_position],
+    ['Figuras a bordo', c.people_on_board], ['Sillas libres', c.free_seats], ['Sitios de pie libres', c.free_standing], ['Confianza', Math.round(d.confidence * 100) + ' %']]
+    .map(function (r) { return '<dt>' + r[0] + '</dt><dd>' + r[1] + '</dd>'; }).join('');
+  $('freshNote').textContent = d.fresh ? (d.approximate ? 'Conteo aproximado.' : 'Réplica construida con la última lectura de las cámaras.')
+    : 'Sin imagen reciente de las cámaras: no se dibujan figuras y solo se muestran los conteos de las puertas.';
+  $('stateBadge').title = 'Estado calculado en esta página con los mismos conteos que entrega el servicio.';
+}
+
+/* ------------------------------------------------------------------ training walk through the aisle */
+var training = { on: false, zone: null, wp: 0, t: 0, dwell: 0, route: null };
+(function () {
+  var r = [{ x: 30, y: 30, name: null, text: 'La figura de entrenamiento entra por la puerta delantera (ENTRADA).' }];
+  STANDS.forEach(function (p) { r.push({ x: p.x + p.w / 2, y: p.y + p.h / 2, name: p.id, p: p }); });
+  r.push({ x: 572, y: 80, name: null, text: 'Llega a la puerta trasera y sale (SALIDA).' }, { x: 576, y: 25, name: null, text: 'Sale por la puerta trasera.' });
+  training.route = r;
+})();
+function trainText(wp) {
+  var w = training.route[wp];
+  if (!w) return '';
+  if (!w.name) return w.text;
+  var cam = w.p.row <= 5 ? 'frontal' : 'trasera';
+  return 'Zona ' + w.name + ' · fila ' + w.p.row + ' · cámara ' + cam + '. Ponga una minifigura de pie sobre la marca ' + w.name + ' y calibre esa cámara; la zona debe aparecer ocupada en esta réplica.';
+}
+function stepTrainer(dt) {
+  if (!training.on || !trainerFig) return;
+  var route = training.route, a = route[training.wp], b = route[Math.min(training.wp + 1, route.length - 1)];
+  if (training.dwell > 0) { training.dwell -= dt; if (training.dwell <= 0) { training.t = 0; training.wp = (training.wp + 1) % route.length; if (training.wp === 0) { trainerFig.position.copy(V(route[0].x, route[0].y, 0)); } setZone(); } return; }
+  var dist = Math.hypot(b.x - a.x, b.y - a.y) || 1, speed = reduceMotion ? 4000 : 110;   // mm/s: about three body lengths of a minifigure per second
+  training.t += dt * speed / dist;
+  if (training.wp === route.length - 1) { training.wp = 0; training.t = 0; trainerFig.position.copy(V(route[0].x, route[0].y, 0)); setZone(); return; }
+  if (training.t >= 1) { training.t = 0; training.wp++; trainerFig.position.copy(V(route[training.wp].x, route[training.wp].y, 0)); setZone(); training.dwell = route[training.wp].name ? (reduceMotion ? 1 : 2.6) : 0.3; return; }
+  trainerFig.position.copy(V(a.x + (b.x - a.x) * training.t, a.y + (b.y - a.y) * training.t, 0));
+}
+function setZone() { var w = training.route[training.wp]; training.zone = w && w.name; $('trainText').textContent = trainText(training.wp); $('trainText').style.color = 'var(--fg)'; }
+function trainStart() {
+  training.on = true; training.wp = 0; training.t = 0; training.dwell = 0;
+  if (!trainerFig) { trainerFig = makeFigure(COL.trainer, true, 'figura de entrenamiento'); twin.scene.add(trainerFig); }
+  trainerFig.visible = true; trainerFig.position.copy(V(training.route[0].x, training.route[0].y, 0)); setZone();
+  $('trainBtn').textContent = 'Detener recorrido'; $('trainBtn').setAttribute('aria-pressed', 'true');
+}
+function trainStop() {
+  training.on = false; training.zone = null; if (trainerFig) trainerFig.visible = false;
+  $('trainBtn').textContent = 'Iniciar recorrido'; $('trainBtn').setAttribute('aria-pressed', 'false'); $('trainText').textContent = 'Recorrido detenido.'; $('trainText').style.color = '';
+}
+$('trainBtn').onclick = function () { training.on ? trainStop() : trainStart(); };
+$('trainNext').onclick = function () {
+  if (!training.on) trainStart();
+  var i = training.wp + 1; while (i < training.route.length && !training.route[i].name) i++;
+  if (i >= training.route.length) i = 1;
+  training.wp = i; training.t = 0; training.dwell = reduceMotion ? 1 : 2.6; trainerFig.position.copy(V(training.route[i].x, training.route[i].y, 0)); setZone();
+};
+
+/* ------------------------------------------------------------------ data source: simulator (same format as the service) */
+function rng(seed) { var a = seed >>> 0; return function () { a = (a + 0x6D2B79F5) >>> 0; var t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+var SCEN = { calm: { s: 0.12, p: 0, o: 0 }, normal: { s: 0.55, p: 0.2, o: 0 }, peak: { s: 0.95, p: 0.75, o: 1 }, over: { s: 1, p: 1, o: 3 } };
+var simData = { seats: new Set(), stands: new Set(), rand: rng(2101), scen: 'normal', blind: false };
+function drift(set, pool, target) {
+  var ids = pool.map(function (p) { return p.id; }), r = simData.rand;
+  var jitter = Math.round(r() * 2) - 1, goal = clamp(target + (target > 0 && target < pool.length ? jitter : 0), 0, pool.length);
+  var guard = 60;
+  while (set.size < goal && guard--) set.add(ids[Math.floor(r() * ids.length)]);
+  while (set.size > goal && guard--) set.delete(Array.from(set)[Math.floor(r() * set.size)]);
+  if (set.size && set.size < pool.length && r() < 0.5) { var out = Array.from(set)[Math.floor(r() * set.size)], inn = ids[Math.floor(r() * ids.length)]; if (!set.has(inn)) { set.delete(out); set.add(inn); } }
+}
+function simSnapshot() {
+  var sc = SCEN[simData.scen];
+  drift(simData.seats, SEATS, Math.round(sc.s * SEATS.length)); drift(simData.stands, STANDS, Math.round(sc.p * STANDS.length));
+  var seated = simData.seats.size, standing = simData.stands.size, oop = sc.o;
+  var occ = Array.from(simData.seats).concat(Array.from(simData.stands)).sort();
+  return { bus_id: '2101', route_id: 'C1', updated_at: Date.now() / 1000, fresh: !simData.blind, occupied: simData.blind ? [] : occ,
+    counts: { seated: seated, standing: standing, standing_out_of_position: oop, people_on_board: seated + standing + oop, free_seats: SEATS.length - seated, free_standing: Math.max(0, STANDS.length - standing) },
+    confidence: simData.blind ? 0.6 : 0.93, approximate: simData.blind };
+}
+
+/* ------------------------------------------------------------------ data source: the real service */
+var live = { on: false, token: null, errors: 0, timer: null };
+function setBadge() {
+  var b = $('srcBadge'); b.innerHTML = '';
+  var s = document.createElement('span'); s.className = 'pill'; s.style.color = live.on ? 'var(--ok)' : 'var(--warn)';
+  s.textContent = live.on ? 'Datos reales · bus ' + $('busId').value : 'Datos simulados'; b.appendChild(s);
+}
+function liveUrl(path) { return $('apiBase').value.trim().replace(/\/+$/, '') + '/api/v1' + path; }
+function liveAuth() {
+  var id = (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'web-' + Math.random().toString(16).slice(2, 12) + Date.now();
+  return fetch(liveUrl('/auth/guest'), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ device_id: id, platform: 'android', push_token: 'web-no-push' }) })
+    .then(function (r) { if (!r.ok) throw new Error('auth ' + r.status); return r.json(); }).then(function (j) { live.token = j.access_token; });
+}
+function liveTick() {
+  var bus = encodeURIComponent($('busId').value.trim());
+  var run = function () { return fetch(liveUrl('/buses/' + bus + '/cabin'), { headers: { authorization: 'Bearer ' + live.token } }); };
+  var p = live.token ? Promise.resolve() : liveAuth();
+  p.then(run).then(function (r) { if (r.status === 401) { live.token = null; throw new Error('sesión vencida'); } if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function (d) { live.errors = 0; $('liveNote').textContent = 'Conectado. Última lectura hace ' + Math.max(0, Math.round(Date.now() / 1000 - d.updated_at)) + ' s.'; applyCabin(d); })
+    .catch(function (e) {
+      live.errors++; $('liveNote').textContent = 'Sin respuesta del servicio (' + (e && e.message ? e.message : 'error de red') + ').';
+      if (live.errors >= 3) { liveStop(); $('liveNote').textContent += ' Se volvió al simulador.'; }
+    });
+}
+function liveStart() { live.on = true; live.errors = 0; live.token = null; $('liveBtn').setAttribute('aria-pressed', 'true'); $('liveBtn').textContent = 'Volver al simulador'; $('scenario').disabled = $('blind').disabled = true; setBadge(); liveTick(); }
+function liveStop() { live.on = false; $('liveBtn').setAttribute('aria-pressed', 'false'); $('liveBtn').textContent = 'Usar datos reales'; $('scenario').disabled = $('blind').disabled = false; setBadge(); }
+$('liveBtn').onclick = function () { live.on ? liveStop() : liveStart(); };
+setInterval(function () { if (live.on) liveTick(); else applyCabin(simSnapshot()); }, 3000);
+$('scenario').onchange = function () { simData.scen = this.value; if (!live.on) applyCabin(simSnapshot()); };
+$('blind').onchange = function () { simData.blind = this.checked; if (!live.on) applyCabin(simSnapshot()); };
+
+/* ------------------------------------------------------------------ toolbar, legend, tabs, loop */
+var LEG = [[COL.seated, 'Lego sentada'], [COL.standing, 'Lego de pie en posición'], [COL.oop, 'Lego fuera de posición'], [COL.trainer, 'Figura de entrenamiento'],
+  [0xc9902a, 'Zona de pie P02–P09'], [COL.entry, 'Entrada D-FRONT'], [COL.exit, 'Salida D-REAR'], [0x2b4c7e, 'Pasillo de recorrido']];
+$('legend').innerHTML = LEG.map(function (l) { return '<span><i class="sw" style="background:#' + ('000000' + l[0].toString(16)).slice(-6) + '"></i>' + l[1] + '</span>'; }).join('');
+
+function codeLabelsOn(on) {
+  if (on && !codeLabels.length) SEATS.forEach(function (p) {
+    var m = new THREE.Mesh(new THREE.PlaneGeometry(0.24, 0.12), new THREE.MeshBasicMaterial({ map: seatTexture(p.id.slice(1)), transparent: true })); m.rotation.x = -Math.PI / 2; m.position.set((p.x + p.w / 2) * MM, 0.146, (p.y + p.h / 2 - INNER_W / 2) * MM); twin.scene.add(m); codeLabels.push(m);
+  });
+  codeLabels.forEach(function (m) { m.visible = on; });
+}
+$('idsBtn').onclick = function () { idsOn = !idsOn; this.setAttribute('aria-pressed', idsOn); };
+$('codesBtn').onclick = function () { codesOn = !codesOn; this.setAttribute('aria-pressed', codesOn); codeLabelsOn(codesOn); };
+$('camsBtn').onclick = function () { camsOn = !camsOn; this.setAttribute('aria-pressed', camsOn); camOverlays.forEach(function (m) { m.visible = camsOn; }); };
+$('topBtn').onclick = function () { Object.assign(twin.goal, { theta: 0, phi: 0.1, dist: 9.6, tx: 3.6, ty: 0, tz: 0 }); };
+$('isoBtn').onclick = function () { Object.assign(twin.goal, { theta: 0.5, phi: 0.9, dist: 8.2, tx: 3.6, ty: 0.1, tz: 0 }); };
+
+twin.hover = function (e) {
+  var f = pickAt(e, twin, pickFigs), h = f || pickAt(e, twin);
+  if (!h) { tip.hidden = true; canvas.style.cursor = ''; return; }
+  var id = h.userData.pid, p = BYID[id], r = stage.getBoundingClientRect(), taken = cabin.occupied.has(id);
+  if (f) tip.textContent = 'Figura de Lego · ' + (p ? id + (p.kind === 'stand' ? ' · de pie en posición' : ' · sentada') : id);
+  else tip.textContent = id + ' · ' + (p.kind === 'stand' ? 'zona de pie' : 'silla') + ' · ' + (taken ? 'ocupada' : 'libre');
+  tip.hidden = false; canvas.style.cursor = 'pointer';
+  tip.style.left = (e.clientX - r.left) + 'px'; tip.style.top = (e.clientY - r.top) + 'px';
+};
+twin.click = function () {};
+function activate(name) {
+  var isTwin = name === 'twin'; current = isTwin ? twin : arch; hoverCb = current.hover; clickCb = current.click;
+  $('tab-arch').setAttribute('aria-selected', !isTwin); $('tab-twin').setAttribute('aria-selected', isTwin);
+  $('tab-arch').tabIndex = isTwin ? -1 : 0; $('tab-twin').tabIndex = isTwin ? 0 : -1;
+  $('view-arch').style.display = isTwin ? 'none' : 'grid'; $('view-twin').style.display = isTwin ? 'grid' : 'none';
+  labelsEl.querySelectorAll('.lbl').forEach(function (e) { e.hidden = true; }); tip.hidden = true; canvas.style.cursor = '';
+  try { history.replaceState(null, '', isTwin ? '#twin' : '#arch'); } catch (e) {}
+  resize();
+}
+$('tab-arch').onclick = function () { activate('arch'); }; $('tab-twin').onclick = function () { activate('twin'); };
+document.querySelector('[role=tablist]').addEventListener('keydown', function (e) { if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { var t = current === arch ? 'twin' : 'arch'; activate(t); $('tab-' + t).focus(); } });
+
+var W = 1, H = 1;
+function resize() {
+  if (!renderer) return; var r = stage.getBoundingClientRect(); W = Math.max(1, Math.round(r.width)); H = Math.max(1, Math.round(r.height));
+  renderer.setSize(W, H, false);
+  [arch, twin].forEach(function (b) {
+    b.camera.aspect = W / H; b.camera.updateProjectionMatrix();
+    var tall = W / H < 0.9;   // portrait (phones): back off so the whole scene fits the width
+    if (tall && !b.portrait) { b.portrait = true; b.goal.dist *= 1.65; b.o.dist *= 1.65; b.maxD *= 1.65; }
+    else if (!tall && b.portrait) { b.portrait = false; b.goal.dist /= 1.65; b.o.dist /= 1.65; b.maxD /= 1.65; }
+  });
+}
+if (window.ResizeObserver) new ResizeObserver(resize).observe(stage); window.addEventListener('resize', resize);
+
+var last = performance.now(), clock = 0;
+function frame(now) {
+  var dt = Math.min(0.1, (now - last) / 1000); last = now; clock += dt;
+  if (renderer) {
+    current.tick.forEach(function (f) { f(dt, clock); });
+    current.place(dt); renderer.render(current.scene, current.camera); projectLabels(current, W, H);
+  }
+  requestAnimationFrame(frame);
+}
+var q = new URLSearchParams(location.search);
+if (q.get('api')) $('apiBase').value = q.get('api'); if (q.get('bus')) $('busId').value = q.get('bus');
+applyCabin(simSnapshot()); setBadge();
+activate(location.hash === '#twin' ? 'twin' : 'arch');
+if (q.get('live') === '1') liveStart();
+requestAnimationFrame(frame);
+window.__twin = { view: function (o) { Object.assign(twin.goal, o); }, applyCabin: applyCabin, snapshot: function () { return cabin.payload; }, figures: function () { return Object.keys(figures).length; } };
+})();
+</script>
+</body></html>
