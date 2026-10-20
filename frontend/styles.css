@@ -1,0 +1,36 @@
+:root {
+  --bg: #f7f7f5; --fg: #1d1d1b; --muted: #5f5f5a; --card: #ffffff; --line: #deded8;
+  --ok: #1b7f3b; --warn: #a15c00; --bad: #b3261e; --none: #6b6b6b; --accent: #1f5fbf;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #161615; --fg: #ececea; --muted: #a3a39d; --card: #222220; --line: #3a3a37;
+          --ok: #5cc27e; --warn: #e3a64a; --bad: #f08a80; --none: #9a9a9a; --accent: #7fa8ee; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; font: 15px/1.45 system-ui, sans-serif; background: var(--bg); color: var(--fg); }
+header { display: flex; justify-content: space-between; align-items: center; gap: 12px;
+         padding: 12px 16px; border-bottom: 1px solid var(--line); }
+h1 { font-size: 1.1rem; margin: 0; }
+h2 { font-size: 1rem; margin: 16px 0 8px; }
+#status { color: var(--muted); font-size: .9rem; }
+#login { max-width: 360px; margin: 48px auto; padding: 0 16px; }
+form { display: grid; gap: 12px; }
+label { display: grid; gap: 4px; }
+input, button { font: inherit; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line);
+                background: var(--card); color: var(--fg); }
+button { cursor: pointer; background: var(--accent); color: #fff; border: 0; }
+.error { color: var(--bad); min-height: 1.2em; margin: 0; }
+main { display: grid; grid-template-columns: 300px 1fr; height: calc(100vh - 53px); }
+aside { padding: 12px 16px; overflow-y: auto; border-right: 1px solid var(--line); }
+fieldset { border: 1px solid var(--line); border-radius: 6px; }
+#routes label { display: flex; gap: 8px; align-items: center; }
+#buses { list-style: none; margin: 0 0 16px; padding: 0; display: grid; gap: 8px; }
+#buses li { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; }
+.state { font-weight: 600; }
+.available_seats { color: var(--ok); } .standing_only { color: var(--warn); }
+.full, .overcrowded { color: var(--bad); } .no_data { color: var(--none); }
+#map { height: 100%; min-height: 320px; }
+@media (max-width: 720px) {
+  main { grid-template-columns: 1fr; grid-template-rows: auto 60vh; height: auto; }
+  aside { border-right: 0; border-bottom: 1px solid var(--line); }
+}
