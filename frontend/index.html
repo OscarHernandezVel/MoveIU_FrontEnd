@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MoveIU</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <h1>MoveIU</h1>
+    <span id="status" role="status" aria-live="polite">Desconectado</span>
+  </header>
+
+  <section id="login" aria-label="Iniciar sesión">
+    <form id="login-form">
+      <label>Correo <input type="email" name="email" required autocomplete="username"></label>
+      <label>Contraseña <input type="password" name="password" required autocomplete="current-password"></label>
+      <button type="submit">Entrar</button>
+      <p id="login-error" class="error" role="alert"></p>
+    </form>
+  </section>
+
+  <main id="app" hidden>
+    <aside>
+      <fieldset>
+        <legend>Rutas (máximo 5)</legend>
+        <div id="routes"></div>
+      </fieldset>
+      <h2>Buses</h2>
+      <ul id="buses"></ul>
+      <button id="logout" type="button">Salir</button>
+    </aside>
+    <div id="map" aria-label="Mapa de buses"></div>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
