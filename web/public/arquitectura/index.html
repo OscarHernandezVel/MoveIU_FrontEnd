@@ -152,6 +152,8 @@ details summary { cursor:pointer; font-weight:500; } pre { margin:6px 0 0; paddi
             <button class="btn ghost" id="camsBtn" aria-pressed="false">Cobertura de cámaras</button>
             <button class="btn ghost" id="topBtn">Vista superior</button>
             <button class="btn ghost" id="isoBtn">Vista 3D</button>
+            <button class="btn ghost" id="camFrontBtn" aria-pressed="false">Cámara frontal</button>
+            <button class="btn ghost" id="camRearBtn" aria-pressed="false">Cámara trasera</button>
           </div>
         </div>
         <div class="card"><details><summary>Último dato recibido (formato del servicio)</summary><pre id="payload" class="mono"></pre></details></div>
@@ -171,6 +173,9 @@ var reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: red
 /* ------------------------------------------------------------------ cabin layout (same as edge/maqueta/make_cut_files.py) */
 var INNER_W = 160, DOUBLE_W = 61, AISLE = 38, LEN = 714, WALL_H = 130, DOOR_H = 70, SEAT_H = 14, BACK_H = 34;
 var FRONT_DOOR = [11, 81], REAR_DOOR = [545, 607], BENCH_X = 616;
+/* webcams: lens 15 mm from the end walls and 157 mm above the floor, 45 degrees down; 640x480 with 110 degrees
+   diagonal is 81 degrees vertical (the same pose as the edge simulation that recognised every position) */
+var ARCH_RAISE = 45, LENS_H = 157, CAM_X = 15, CAM_PITCH = Math.PI / 4, CAM_VFOV = 81;
 function buildLayout() {
   var starts = [54], i, items = [];
   for (i = 0; i < 8; i++) starts.push(108 + i * 54);
@@ -230,6 +235,9 @@ Bundle.prototype.label = function (html, pos, cls) {
   var l = { el: el, pos: pos, bundle: this }; this.labels.push(l); return l;
 };
 Bundle.prototype.place = function (dt) {
+  var cam = this.camera, fov = this.fixed ? this.fixed.fov : 40;
+  if (cam.fov !== fov) { cam.fov = fov; cam.updateProjectionMatrix(); }
+  if (this.fixed) { cam.position.copy(this.fixed.pos); cam.lookAt(this.fixed.look); return; }   // a camera of the bus
   var o = this.o, g = this.goal, k = reduceMotion ? 1 : Math.min(1, dt * 6);
   ['theta', 'phi', 'dist', 'tx', 'ty', 'tz'].forEach(function (p) { o[p] += (g[p] - o[p]) * k; });
   var s = Math.sin(o.phi);
@@ -244,7 +252,7 @@ function setLabelsVisible(b) { labelsEl.querySelectorAll('.lbl').forEach(functio
 function projectLabels(b, w, h) {
   var v = new THREE.Vector3();
   b.labels.forEach(function (l) {
-    if (l.hidden) { l.el.hidden = true; return; }
+    if (l.hidden || b.fixed) { l.el.hidden = true; return; }   // through a bus camera: the scene as it would look
     v.copy(l.pos).project(b.camera);
     if (v.z > 1 || v.z < -1) { l.el.hidden = true; return; }
     l.el.hidden = false;
@@ -267,6 +275,7 @@ canvas.addEventListener('pointermove', function (e) {
     var a = pointers[ids[0]], b = pointers[ids[1]]; if (e.pointerId == ids[0]) a = { x: e.clientX, y: e.clientY }; else b = { x: e.clientX, y: e.clientY };
     var d = Math.hypot(a.x - b.x, a.y - b.y); if (pinch) g.dist = clamp(g.dist * pinch / d, current.minD, current.maxD); pinch = d;
   } else {
+    if (current.fixed) leaveCameraView();   // dragging takes the view back from the bus camera
     g.theta -= (e.clientX - p.x) * 0.006; g.phi = clamp(g.phi - (e.clientY - p.y) * 0.006, 0.12, 1.5);
     current.o.theta = g.theta; current.o.phi = g.phi;
     moved += Math.abs(e.clientX - p.x) + Math.abs(e.clientY - p.y);
@@ -279,7 +288,7 @@ function endPointer(e) {
 }
 canvas.addEventListener('pointerup', endPointer); canvas.addEventListener('pointercancel', endPointer);
 canvas.addEventListener('pointerleave', function () { tip.hidden = true; });
-canvas.addEventListener('wheel', function (e) { e.preventDefault(); current.goal.dist = clamp(current.goal.dist * Math.exp(e.deltaY * 0.001), current.minD, current.maxD); }, { passive: false });
+canvas.addEventListener('wheel', function (e) { e.preventDefault(); if (current.fixed) leaveCameraView(); current.goal.dist = clamp(current.goal.dist * Math.exp(e.deltaY * 0.001), current.minD, current.maxD); }, { passive: false });
 function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 arch.minD = 8; arch.maxD = 40; twin.minD = 2.5; twin.maxD = 22;
 
@@ -426,7 +435,7 @@ arch.click = function (e) { var h = pickAt(e, arch); if (h) showNode(h.userData.
 /* ------------------------------------------------------------------ TWIN scene: the model bus with LEGO minifigures */
 var COL = { seated: 0x4f77a8, standing: 0x3f8c7e, oop: 0xc0872c, trainer: 0x7a5ea0, entry: 0x2a7566, exit: 0xa1443b, head: 0xd8b24a, legs: 0x34404f };
 var seatMeshes = {}, zoneMeshes = {}, figures = {}, oopFigs = [], codeLabels = [], camOverlays = [], trainerFig = null;
-var codesOn = false, camsOn = false, idsOn = false, pickFigs = [];
+var codesOn = false, camsOn = false, idsOn = false, pickFigs = [], camParts = {};
 var K = 0.01;   // mm -> scene units
 
 function box(w, h, d, mat, x, y, z) { var m = new THREE.Mesh(new THREE.BoxGeometry(w * K, h * K, d * K), mat); m.position.set(x * K, y * K, z * K); m.castShadow = true; return m; }
@@ -544,14 +553,18 @@ function outline(w, d, color) {
     var t = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.15), new THREE.MeshBasicMaterial({ map: seatTexture(p.id, '#7a5200'), transparent: true }));
     t.rotation.x = -Math.PI / 2; t.position.set(cx - w / 2 + 0.2, 0.009, cz + d / 2 - 0.09); s.add(t);
   });
-  /* cameras on arches at both ends, and optional coverage areas (front rows 1-5, rear rows 6-11) */
+  /* cameras on arches raised 45 mm over the walls (lens 157 mm above the floor, 45 degrees down), as in
+     edge/bus_edge/vision/scene.py; and optional coverage areas (front rows 1-5, rear rows 6-11) */
   function cam(x, dirSign, name, sub) {
-    var arch = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, Wd), railMat); arch.position.set(x * K, (WALL_H - 8) * K, 0); s.add(arch);
-    var body = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.1, 0.1), new THREE.MeshStandardMaterial({ color: 0x2b3442 })); body.position.set(x * K, (WALL_H - 14) * K, 0); s.add(body);
-    var lens = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.07, 12), new THREE.MeshStandardMaterial({ color: 0x9fb3cc })); lens.rotation.z = Math.PI / 2; lens.position.set(x * K + dirSign * 0.1, (WALL_H - 16) * K, 0); s.add(lens);
-    twin.label('<b>' + name + '</b><small>' + sub + '</small>', new THREE.Vector3(x * K, (WALL_H + 6) * K, 0), 'minor');
+    var top = WALL_H + ARCH_RAISE;
+    var arch = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.03, Wd), railMat); arch.position.set(x * K, (top - 1.5) * K, 0); s.add(arch);
+    [-1, 1].forEach(function (sg) { var post = new THREE.Mesh(new THREE.BoxGeometry(0.2, (ARCH_RAISE + 20) * K, 0.03), railMat); post.position.set(x * K, (top - (ARCH_RAISE + 20) / 2) * K, sg * (Wd / 2 - 0.03)); s.add(post); });
+    var body = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.3, 0.38), new THREE.MeshStandardMaterial({ color: 0x2b3442 })); body.position.set(x * K, LENS_H * K, 0); body.rotation.z = -dirSign * Math.PI / 4; s.add(body);
+    var lens = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.08, 16), new THREE.MeshStandardMaterial({ color: 0x9fb3cc })); lens.rotation.z = Math.PI / 2 - dirSign * Math.PI / 4; lens.position.set(x * K + dirSign * 0.12, (LENS_H - 12) * K, 0); s.add(lens);
+    camParts[dirSign > 0 ? 'front' : 'rear'] = [body, lens];   // hidden while looking through this camera
+    twin.label('<b>' + name + '</b><small>' + sub + '</small>', new THREE.Vector3(x * K, (top + 8) * K, 0), 'minor');
   }
-  cam(12, 1, 'Cámara frontal', 'filas 1–5'); cam(LEN - 8, -1, 'Cámara trasera', 'filas 6–11');
+  cam(CAM_X, 1, 'Cámara frontal', 'filas 1–5'); cam(LEN - CAM_X, -1, 'Cámara trasera', 'filas 6–11');
   [[0, 324, 0x2b4c7e], [324, LEN, 0x2a7566]].forEach(function (r) {
     var m = new THREE.Mesh(new THREE.PlaneGeometry((r[1] - r[0]) * K - 0.04, Wd - 0.04), new THREE.MeshBasicMaterial({ color: r[2], transparent: true, opacity: 0.12 })); m.rotation.x = -Math.PI / 2; m.position.set((r[0] + r[1]) / 2 * K, 0.001, 0); m.visible = false; s.add(m); camOverlays.push(m);
   });
@@ -742,8 +755,28 @@ function codeLabelsOn(on) {
 $('idsBtn').onclick = function () { idsOn = !idsOn; this.setAttribute('aria-pressed', idsOn); };
 $('codesBtn').onclick = function () { codesOn = !codesOn; this.setAttribute('aria-pressed', codesOn); codeLabelsOn(codesOn); };
 $('camsBtn').onclick = function () { camsOn = !camsOn; this.setAttribute('aria-pressed', camsOn); camOverlays.forEach(function (m) { m.visible = camsOn; }); };
-$('topBtn').onclick = function () { Object.assign(twin.goal, { theta: 0, phi: 0.1, dist: 9.6, tx: 3.6, ty: 0, tz: 0 }); };
-$('isoBtn').onclick = function () { Object.assign(twin.goal, { theta: 0.5, phi: 0.9, dist: 8.2, tx: 3.6, ty: 0.1, tz: 0 }); };
+$('topBtn').onclick = function () { leaveCameraView(); Object.assign(twin.goal, { theta: 0, phi: 0.1, dist: 9.6, tx: 3.6, ty: 0, tz: 0 }); };
+$('isoBtn').onclick = function () { leaveCameraView(); Object.assign(twin.goal, { theta: 0.5, phi: 0.9, dist: 8.2, tx: 3.6, ty: 0.1, tz: 0 }); };
+
+/* The cabin from where each webcam is (same pose as the edge simulation): what the camera would see, rebuilt from
+   position ids with generic minifigures. No image of the bus is involved at any point. */
+function cameraView(name) {
+  var x = name === 'front' ? CAM_X : LEN - CAM_X, dir = name === 'front' ? 1 : -1, reach = 100;
+  var pos = V(x, INNER_W / 2, LENS_H * K), look = V(x + dir * reach, INNER_W / 2, (LENS_H - reach * Math.tan(CAM_PITCH)) * K);
+  Object.keys(camParts).forEach(function (n) { camParts[n].forEach(function (m) { m.visible = n !== name; }); });
+  twin.fixed = { pos: pos, look: look, fov: CAM_VFOV, name: name };
+  ['camFrontBtn', 'camRearBtn'].forEach(function (id) { $(id).setAttribute('aria-pressed', String((id === 'camFrontBtn') === (name === 'front'))); });
+  $('hint').textContent = 'Vista de la cámara ' + (name === 'front' ? 'frontal (filas 1–5)' : 'trasera (filas 6–11)') + ': réplica con figuras genéricas, sin imagen real. Arrastre para salir.';
+}
+function leaveCameraView() {
+  if (!twin.fixed) return;
+  twin.fixed = null;
+  Object.keys(camParts).forEach(function (n) { camParts[n].forEach(function (m) { m.visible = true; }); });
+  ['camFrontBtn', 'camRearBtn'].forEach(function (id) { $(id).setAttribute('aria-pressed', 'false'); });
+  $('hint').textContent = 'Arrastre para girar · rueda o pellizco para acercar';
+}
+$('camFrontBtn').onclick = function () { twin.fixed && twin.fixed.name === 'front' ? leaveCameraView() : cameraView('front'); };
+$('camRearBtn').onclick = function () { twin.fixed && twin.fixed.name === 'rear' ? leaveCameraView() : cameraView('rear'); };
 
 twin.hover = function (e) {
   var f = pickAt(e, twin, pickFigs), h = f || pickAt(e, twin);
