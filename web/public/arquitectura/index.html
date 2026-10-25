@@ -433,7 +433,7 @@ arch.hover = function (e) { var h = pickAt(e, arch); hoverNode = h ? h.userData.
 arch.click = function (e) { var h = pickAt(e, arch); if (h) showNode(h.userData.node); };
 
 /* ------------------------------------------------------------------ TWIN scene: the model bus with LEGO minifigures */
-var COL = { seated: 0x4f77a8, standing: 0x3f8c7e, oop: 0xc0872c, trainer: 0x7a5ea0, entry: 0x2a7566, exit: 0xa1443b, head: 0xd8b24a, legs: 0x34404f };
+var COL = { seated: 0x4f77a8, standing: 0x3f8c7e, oop: 0xc0872c, trainer: 0x7a5ea0, entry: 0x2a7566, exit: 0xa1443b, head: 0xf2cd37, legs: 0x34404f };   // head: LEGO bright yellow, like the model's minifigures
 var seatMeshes = {}, zoneMeshes = {}, figures = {}, oopFigs = [], codeLabels = [], camOverlays = [], trainerFig = null;
 var codesOn = false, camsOn = false, idsOn = false, pickFigs = [], camParts = {};
 var K = 0.01;   // mm -> scene units
