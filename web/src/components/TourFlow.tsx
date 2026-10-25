@@ -4,7 +4,7 @@
  */
 const NODES = [
   { name: "Cámaras del bus", note: "Ven la cabina." },
-  { name: "Raspberry Pi", note: "Cuenta las posiciones ocupadas y descarta la imagen.", accent: true },
+  { name: "Equipo a bordo", note: "Cuenta las posiciones ocupadas y descarta la imagen.", accent: true },
   { name: "Servidor (Back)", note: "Guarda solo conteos e identificadores de posición." },
   { name: "MoveIU en su celular", note: "Dibuja el plano con sillas ocupadas y libres." },
 ];

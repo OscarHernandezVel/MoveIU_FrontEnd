@@ -171,7 +171,7 @@ export default function Tour() {
         {step === 4 && (
           <>
             <p>
-              Para proteger a los pasajeros, <strong>la imagen de la cámara no sale del bus</strong>. La Raspberry Pi decide qué
+              Para proteger a los pasajeros, <strong>la imagen de la cámara no sale del bus</strong>. El equipo a bordo decide qué
               posiciones están ocupadas, descarta la imagen y envía solo esa lista.
             </p>
             <TourFlow />
