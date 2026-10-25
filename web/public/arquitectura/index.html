@@ -316,10 +316,10 @@ var NODES = {
     stack: [['vLLM u Ollama (API compatible con OpenAI)', 'Apache-2.0 / MIT'], ['Modelos Qwen, Gemma o Mistral', 'Apache-2.0 según cada tarjeta de modelo'], ['YOLOv8n (ONNX) en el borde', 'AGPL-3.0'], ['MLflow', 'Apache-2.0']],
     v7: 'v7 llamaba a un modelo propietario por API. Ahora el proveedor es configurable y por defecto abierto; Claude u otro queda opcional.',
     note: 'Para las figuras de Lego de la maqueta se necesita un detector entrenado con ellas. YOLOv8 es AGPL: no se distribuyen sus pesos en el repositorio; evalúe YOLOX o RT-DETR si necesita licencia permisiva. Llama no es OSI-abierto. La calidad de los modelos abiertos con herramientas no se probó aquí. Si la IA falla, hay reglas de respaldo.' },
-  edge: { name: 'Bus (borde)', tech: 'Arduino · Raspberry Pi', pos: [-7.5, 0, 6], color: '#6c7787', small: true,
-    role: 'Cuenta pasajeros con FC-51 en las dos puertas y estima la ocupación con la visión (en la maqueta, minifiguras de Lego). Envía al back solo conteos y los identificadores de posición ocupada; las imágenes no salen del bus.',
+  edge: { name: 'Bus (borde)', tech: 'Arduino · portátil Windows', pos: [-7.5, 0, 6], color: '#6c7787', small: true,
+    role: 'Cuenta pasajeros con dos FC-51 por puerta (el orden de los haces dice si sube o baja, en cualquiera de las dos puertas) y estima la ocupación con la visión (en la maqueta, minifiguras de Lego). Envía al back solo conteos y los identificadores de posición ocupada; las imágenes no salen del bus.',
     stack: [['Agente Python (bus_edge)', 'del proyecto'], ['OpenCV (headless)', 'Apache-2.0'], ['ONNX Runtime', 'MIT'], ['pyserial', 'BSD-3-Clause'], ['Firmware Arduino', 'del proyecto']],
-    v7: 'Igual que v7 (RF-6): puertas por sensor, cámaras por visión, GPS por NMEA, y buffer SQLite si no hay red.',
+    v7: 'Como v7 (RF-6): puertas por sensor, cámaras por visión y buffer SQLite si no hay red. Cambios: dos sensores por puerta en lugar de uno, y en la maqueta un portátil en lugar de la Raspberry Pi con GPS simulado sobre la ruta real.',
     note: 'Probado con simuladores; la maqueta física y las cámaras reales aún no se han calibrado. Un detector entrenado con personas no reconoce de forma fiable una minifigura de Lego: hace falta un modelo propio (edge/docs/lego.md).' }
 };
 var EDGES = [
