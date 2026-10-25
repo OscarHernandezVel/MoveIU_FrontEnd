@@ -5,6 +5,7 @@ import { use, useEffect, useState } from "react";
 import { CabinMap } from "@/components/CabinMap";
 import { DemoBanner } from "@/components/DemoBanner";
 import { OccupancyBadge } from "@/components/OccupancyBadge";
+import { RealOccupancy } from "@/components/RealOccupancy";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { api } from "@/lib/api";
 import { fromRest } from "@/lib/convert";
@@ -51,7 +52,14 @@ export default function BusPage({ params }: { params: Promise<{ id: string }> })
           Ruta {bus.routeId} · <OccupancyBadge state={bus.state} percentage={bus.percentage} />
         </p>
       ) : null}
-      {routesLoaded ? <CabinMap busId={id} /> : <p className="muted" aria-busy="true">Cargando…</p>}
+      {routesLoaded ? (
+        <>
+          <RealOccupancy busId={id} />
+          <CabinMap busId={id} />
+        </>
+      ) : (
+        <p className="muted" aria-busy="true">Cargando…</p>
+      )}
     </main>
   );
 }

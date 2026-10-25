@@ -169,6 +169,14 @@ select, .btn { font: inherit; color: var(--fg); background: var(--card); border:
 }
 .frame { width: 100%; height: 70vh; height: 70svh; min-height: 420px; border: 2px solid var(--line); border-radius: 10px; background: var(--card); }
 
+/* «Mostrar ocupación real del bus #»: botón ancho en el celular, vistas en fila que se acomodan */
+.real-occupancy { display: grid; gap: 10px; margin: 12px 0; }
+.real-occupancy > .btn { width: 100%; min-height: 48px; } @media (min-width: 720px) { .real-occupancy > .btn { width: auto; justify-self: start; } }
+.real-occupancy-body { display: grid; gap: 10px; min-width: 0; }
+.real-occupancy-body .row { display: flex; flex-wrap: wrap; gap: 8px; }
+.real-occupancy-body .btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.real-occupancy-body .frame { height: 60vh; height: 60svh; min-height: 320px; }
+
 /* módulo de música (secundario) */
 .music { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; background: var(--card); border: 2px solid var(--line); border-radius: 10px; padding: 16px; }
 .music-now h2 { font-size: 1.3rem; margin: 2px 0; } .music-now p { margin: 0; }
