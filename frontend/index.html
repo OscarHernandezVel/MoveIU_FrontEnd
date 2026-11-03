@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&display=swap">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-  <link rel="stylesheet" href="styles.css?v=4">
+  <link rel="stylesheet" href="styles.css?v=7">
 </head>
 <body>
   <a class="skip" href="#main">Saltar al contenido</a>
@@ -100,11 +100,19 @@
       </nav>
       <div class="topbar-end">
         <span id="status" class="status" data-state="off" role="status" aria-live="polite"><span class="dot" aria-hidden="true"></span><span class="status-text">Desconectado</span></span>
+        <button type="button" id="sim-btn" class="btn sim-btn" aria-pressed="false"><span class="long">Iniciar simulación</span><span class="short" aria-hidden="true">Simular</span></button>
         <span id="avatar" class="avatar" aria-hidden="true"></span>
         <button type="button" id="logout" class="btn ghost">Salir</button>
       </div>
     </header>
 
+    <div id="sim-banner" class="sim-banner" role="status" hidden>
+      <span class="sim-dot" aria-hidden="true"></span>
+      <strong>Modo simulación</strong>
+      <span id="sim-count" class="muted"></span>
+      <span class="muted">· los buses emulados no son datos reales</span>
+      <button type="button" id="sim-exit" class="btn ghost">Salir</button>
+    </div>
     <main id="main" class="content">
       <!-- HU-03 / HU-04: rutas, buses y mapa -->
       <section id="view-map" class="view-map">
@@ -177,7 +185,7 @@
               <select name="scenario"><option value="valle">Hora valle</option><option value="normal" selected>Normal</option><option value="pico">Hora pico</option></select>
             </label>
             <label class="check"><input type="checkbox" name="on_map" checked> Mostrar en el mapa</label>
-            <button type="submit" id="emu-toggle" class="btn primary">Iniciar emulación</button>
+            <button type="submit" id="emu-toggle" class="btn primary">Iniciar simulación</button>
           </form>
         </div>
         <div class="emu-kpis" id="emu-kpis" aria-live="polite"></div>
@@ -203,8 +211,8 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
   <script src="config.js"></script>
-  <script src="cabin.js?v=4"></script>
-  <script src="emulation.js?v=4"></script>
-  <script src="app.js?v=4"></script>
+  <script src="cabin.js?v=7"></script>
+  <script src="emulation.js?v=7"></script>
+  <script src="app.js?v=7"></script>
 </body>
 </html>

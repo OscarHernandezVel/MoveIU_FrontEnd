@@ -275,6 +275,26 @@ label.check input { min-height: 0; width: 18px; height: 18px; accent-color: var(
 .emu-bus-top strong, .emu-bus-top .state-line { white-space: nowrap; }
 .emu-bus-top .state-line { font-size: 13px; }
 
+/* interruptor y aviso del modo simulación */
+.sim-btn { height: 40px; padding: 0 14px; border-color: var(--amber); color: var(--amber); font-weight: 600; }
+.sim-btn, .nav-link, .btn.ghost { white-space: nowrap; }
+.sim-btn .short { display: none; }
+@media (max-width: 1000px) {
+  .sim-btn .long { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .sim-btn .short { display: inline; }
+}
+@media (max-width: 720px) { .sim-banner > .muted:not(#sim-count) { display: none; } .sim-banner { padding: 8px 12px; } }
+.sim-btn[aria-pressed="true"] { background: var(--amber); color: var(--warn-ink); border-color: var(--amber); }
+.sim-banner { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 20px; position: relative; z-index: 15;
+              background: color-mix(in srgb, var(--amber) 14%, var(--surface)); border-bottom: 1px solid color-mix(in srgb, var(--amber) 40%, transparent);
+              font-size: 14px; animation: banner-in .28s var(--ease) both; }
+.sim-banner strong { color: var(--amber); }
+.sim-banner .btn { height: 32px; margin-left: auto; border-color: var(--amber); color: var(--amber); }
+.sim-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--amber); animation: sim-beat 1.6s ease-out infinite; }
+@keyframes banner-in { from { opacity: 0; transform: translateY(-100%); } to { opacity: 1; transform: none; } }
+@keyframes sim-beat { 0% { box-shadow: 0 0 0 0 rgba(255, 181, 71, .6); } 100% { box-shadow: 0 0 0 10px rgba(255, 181, 71, 0); } }
+@media (min-width: 721px) { body.simulating .scrim, body.simulating .panel { top: 113px; } }
+
 /* gemelo 3D en el panel del bus */
 .cabin-box { display: flex; flex-direction: column; gap: 12px; }
 .cabin-box .seg { grid-auto-flow: row; grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -328,6 +348,18 @@ iframe.twin { width: 100%; height: 380px; border: 1px solid var(--line); border-
 }
 
 @media (max-width: 480px) {
+  .sim-btn { padding: 0 10px; font-size: 13px; }
+  #sim-count { display: none; }
   .status .status-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   .nav-link { padding: 0 8px; font-size: 14px; }
+}
+
+/* celular: las pestañas se desplazan a los lados; estado, simulación y salir quedan siempre a la vista */
+@media (max-width: 720px) {
+  .topbar { gap: 8px; }
+  .topbar .brand { display: none; }
+  .nav { flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  .nav::-webkit-scrollbar { display: none; }
+  .topbar-end { flex: none; gap: 6px; }
+  .topbar-end .btn.ghost { padding: 0 10px; }
 }

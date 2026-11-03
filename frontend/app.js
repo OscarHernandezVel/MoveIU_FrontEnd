@@ -728,38 +728,60 @@ function renderEmu() {
   }
 }
 
-Emu.onTick(() => {
-  render();
-  if (!byId("view-emu").hidden) renderEmu();
-});
+// Iniciar o salir de la simulación: el mismo interruptor en la barra superior, en el aviso y en la vista Emulación.
+function syncSim() {
+  const on = Emu.running();
+  const n = Emu.list().length;
+  const top = byId("sim-btn");
+  top.querySelector(".long").textContent = on ? "Salir de la simulación" : "Iniciar simulación";
+  top.querySelector(".short").textContent = on ? "Salir" : "Simular";
+  top.setAttribute("aria-pressed", String(on));
+  const form = byId("emu-toggle");
+  form.textContent = on ? "Salir de la simulación" : "Iniciar simulación";
+  form.classList.toggle("primary", !on);
+  byId("sim-banner").hidden = !on;
+  byId("sim-count").textContent = n + " buses emulados en " + new Set(Emu.list().map((b) => b.route)).size + " rutas";
+  document.body.classList.toggle("simulating", on);
+}
 
-byId("emu-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const form = event.target;
-  const button = byId("emu-toggle");
-  if (Emu.running()) {
-    Emu.stop();
-    button.textContent = "Iniciar emulación";
-    button.classList.add("primary");
-    return;
-  }
-  button.disabled = true;
-  button.textContent = "Cargando recorridos…";
+async function startSim() {
+  const form = byId("emu-form");
+  const buttons = [byId("sim-btn"), byId("emu-toggle")];
+  buttons.forEach((b) => { b.disabled = true; });
+  byId("emu-toggle").textContent = "Cargando recorridos…";
   try {
     const ids = [...routes.keys()];
+    if (!ids.length) throw new Error("No hay rutas cargadas todavía.");
     await Promise.all(ids.map(ensurePath));
     emuRows.clear();
     Emu.start(ids.map((id) => ({ route_id: id, path: routes.get(id).path })), Number(form.per_route.value), form.scenario.value);
-    button.textContent = "Detener emulación";
-    button.classList.remove("primary");
-    toast(Emu.list().length + " buses emulados en " + ids.length + " rutas.");
+    toast("Simulación iniciada: " + Emu.list().length + " buses en " + ids.length + " rutas.");
   } catch (err) {
     toast(err.message);
-    button.textContent = "Iniciar emulación";
   } finally {
-    button.disabled = false;
+    buttons.forEach((b) => { b.disabled = false; });
+    syncSim();
   }
+}
+
+function stopSim() {
+  if (panelState && panelState.kind === "bus" && Emu.get(panelState.id)) closePanel(true);
+  Emu.stop();
+  emuRows.clear();
+  toast("Saliste de la simulación: solo se muestran datos reales.");
+}
+
+const toggleSim = () => (Emu.running() ? stopSim() : startSim());
+
+Emu.onTick(() => {
+  render();
+  syncSim();
+  if (!byId("view-emu").hidden) renderEmu();
 });
+
+byId("emu-form").addEventListener("submit", (event) => { event.preventDefault(); toggleSim(); });
+byId("sim-btn").addEventListener("click", toggleSim);
+byId("sim-exit").addEventListener("click", stopSim);
 byId("emu-form").scenario.addEventListener("change", (e) => Emu.setScenario(e.target.value));
 byId("emu-form").on_map.addEventListener("change", (e) => { emuOnMap = e.target.checked; render(); });
 
