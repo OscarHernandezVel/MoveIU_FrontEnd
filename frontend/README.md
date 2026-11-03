@@ -8,6 +8,8 @@ No necesita compilación: HTML + CSS + JavaScript y **Leaflet 1.9** (desde cdnjs
 | `index.html` | Estructura: acceso (entrar / crear cuenta), mapa con rutas y buses, panel del bus o de la parada, vista de operación |
 | `app.js` | Sesión (JWT con renovación automática), WebSocket `/ws/v1/buses/stream` (*snapshot* + *deltas*, `resync` si falta un `seq`, reconexión con espera creciente), rutas, paradas, hallazgos y análisis |
 | `cabin.js` | Plano de la cabina armado con los identificadores de posición (`S02-L1`, `P04`…): ninguna imagen sale del bus |
+| `emulation.js` | Emulación: buses ficticios que recorren el trazado real de cada ruta y suben o bajan pasajeros (solo en el navegador) |
+| `gemelo/` | Gemelo 3D de la cabina (three.js r128, MIT, servido desde el mismo sitio); el panel del bus le pasa cada lectura |
 | `config.js` | URL del backend, rutas iniciales y centro del mapa — **lo único que cambia por entorno** |
 | `styles.css` | Tema «Pasto de noche» (oscuro, y claro según el sistema), transiciones animadas, diseño para celular y movimiento reducido |
 
@@ -18,6 +20,8 @@ No necesita compilación: HTML + CSS + JavaScript y **Leaflet 1.9** (desde cdnjs
 * **Bus:** ocupación, sillas libres, sitios de pie y el botón «Mostrar ocupación real del bus #…», que muestra el plano de la cabina y avisa si el plano no está al día.
 * **Parada:** «este bus o el siguiente» en ida o regreso, con el recomendado resaltado.
 * **Estado:** En vivo / Conectando / Reconectando (los buses se atenúan mientras no hay datos frescos).
+* **Cabina 3D:** en el panel del bus, el plano o el gemelo 3D visto desde la cámara frontal, la trasera o libre.
+* **Emulación:** buses ficticios en todas las rutas, con escenario (valle, normal, pico), indicadores de la flota y la opción de verlos en el mapa. No envía nada al backend.
 * **Operación** (solo administrador y auditor): hallazgos por reglas o IA y análisis de la flota.
 * **Accesibilidad:** el color nunca es la única señal, foco visible, navegación con teclado y `prefers-reduced-motion`.
 

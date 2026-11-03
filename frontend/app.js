@@ -8,12 +8,13 @@ const API = (cfg.apiBaseUrl || window.location.origin).replace(/\/+$/, "");
 const WS_URL = API.replace(/^http/, "ws") + "/ws/v1/buses/stream";
 const MAX_ROUTES = 5;
 const GLIDE_MS = 2800;
-const ROUTE_COLORS = ["#2EE6C5", "#FFB547", "#7C8CFF", "#F472B6", "#34D399"];
+const ROUTE_COLORS = ["#2EE6C5", "#FFB547", "#7C8CFF", "#F472B6", "#34D399", "#60A5FA", "#F97316", "#A3E635", "#C084FC", "#FDE047"];
 const STATE_LABEL = {
   available_seats: "Sillas disponibles", standing_only: "Solo de pie",
   full: "Lleno", overcrowded: "Sobrecupo", no_data: "Sin datos",
 };
 const DIR_LABEL = { outbound: "ida", return: "regreso" };
+const CABIN_VIEWS = [["plan", "Plano"], ["front", "3D frontal"], ["rear", "3D trasera"], ["3d", "3D libre"]];
 const SEVERITY = { low: "Baja", medium: "Media", high: "Alta", critical: "Crítica" };
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
@@ -34,6 +35,7 @@ const selected = new Set((cfg.defaultRoutes || []).slice(0, MAX_ROUTES));
 let socket = null, reconnectDelay = 1000, refreshTimer = null, map = null;
 let panelState = null;         // { kind: "bus", id, timer } | { kind: "stop", ... }
 let toastTimer = null;
+let emuOnMap = true;           // la emulación también pinta sus buses en el mapa
 
 // ---------------------------------------------------------------- utilidades
 
@@ -261,11 +263,15 @@ function toggleRoute(id, chip) {
   countRoutes();
 }
 
+async function ensurePath(id) {
+  const route = routes.get(id);
+  if (!route.path) route.path = (await api("/routes/" + encodeURIComponent(id))).path || [];
+  return route.path;
+}
+
 async function drawRoute(id) {
   const route = routes.get(id);
-  try {
-    if (!route.path) route.path = (await api("/routes/" + encodeURIComponent(id))).path || [];
-  } catch (err) { toast(err.message); return; }
+  try { await ensurePath(id); } catch (err) { toast(err.message); return; }
   if (!selected.has(id)) return;
   if (route.layers) route.layers.remove();
   const group = L.layerGroup().addTo(map);
@@ -292,6 +298,7 @@ async function drawRoute(id) {
 function liveBuses() {
   const list = [];
   for (const [route, feed] of feeds) if (selected.has(route)) list.push(...feed.buses.values());
+  if (emuOnMap) list.push(...Emu.list().filter((b) => selected.has(b.route)));
   return list.sort((a, b) => a.pct - b.pct);
 }
 
@@ -363,7 +370,7 @@ function busCard(id) {
 function fillCard(li, bus, label) {
   const b = li.firstChild;
   b.querySelector("strong").textContent = "Bus " + bus.bus;
-  b.querySelector(".bus-route").textContent = bus.route + (bus.dir ? " · " + (DIR_LABEL[bus.dir] || bus.dir) : "");
+  b.querySelector(".bus-route").textContent = bus.route + (bus.dir ? " · " + (DIR_LABEL[bus.dir] || bus.dir) : "") + (bus.emu ? " · emulado" : "");
   b.querySelector(".bus-route").style.color = (routes.get(bus.route) || {}).color || "";
   const line = b.querySelector(".state-line");
   line.className = "state-line " + bus.state;
@@ -412,7 +419,7 @@ function closePanel(instant) {
 
 function findBus(id) {
   for (const feed of feeds.values()) if (feed.buses.has(id)) return feed.buses.get(id);
-  return null;
+  return Emu.get(id);
 }
 
 // HU-05: detalle del bus y «Mostrar ocupación real del bus #»
@@ -430,12 +437,31 @@ function openBus(id) {
   toggle.type = "button";
   toggle.setAttribute("aria-expanded", "false");
   toggle.setAttribute("aria-controls", "cabin-box");
-  const cabinBox = el("div");
+  const cabinBox = el("div", "cabin-box");
   cabinBox.id = "cabin-box";
   cabinBox.hidden = true;
+  // Plano 2D o gemelo 3D (gemelo/index.html): los dos se arman con los mismos identificadores de posición.
+  const views = el("div", "seg");
+  views.setAttribute("role", "group");
+  views.setAttribute("aria-label", "Vista de la cabina");
+  const stage = el("div", "cabin-stage");
+  CABIN_VIEWS.forEach(([key, label], i) => {
+    const b = el("button", "seg-btn", label);
+    b.type = "button";
+    b.dataset.view = key;
+    b.setAttribute("aria-pressed", String(i === 0));
+    b.addEventListener("click", () => {
+      views.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+      stage.replaceChildren();
+      showCabin(stage, key);
+    });
+    views.append(b);
+  });
+  cabinBox.append(views, stage);
   const privacy = el("p", "privacy");
   privacy.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg>';
-  privacy.append("Plano armado con identificadores de posición. Ninguna imagen ni rostro sale del bus.");
+  privacy.append("Plano armado con identificadores de posición. Ninguna imagen ni rostro sale del bus." +
+    (bus.emu ? " Este bus es emulado: sus datos no son reales." : ""));
   toggle.addEventListener("click", () => {
     const open = toggle.getAttribute("aria-expanded") !== "true";
     toggle.setAttribute("aria-expanded", String(open));
@@ -443,14 +469,14 @@ function openBus(id) {
     toggle.classList.toggle("primary", !open);
     cabinBox.hidden = !open;
     clearInterval(panelState.timer);
-    if (open) { loadCabin(id, cabinBox); panelState.timer = setInterval(() => loadCabin(id, cabinBox), 3000); }
+    if (open) { loadCabin(id, stage); panelState.timer = setInterval(() => loadCabin(id, stage), 3000); }
   });
   body.append(stats, state, toggle, cabinBox, privacy);
   fillBusStats();
   cards.forEach((li, key) => li.firstChild.setAttribute("aria-current", String(key === id)));
   const pin = markers.get(id) && markers.get(id).getElement();
   if (pin && pin.querySelector(".bus-pin")) pin.querySelector(".bus-pin").classList.add("selected");
-  if (markers.get(id)) map.panTo(markers.get(id).getLatLng(), { animate: !reducedMotion.matches });
+  if (markers.get(id) && !byId("view-map").hidden) map.panTo(markers.get(id).getLatLng(), { animate: !reducedMotion.matches });
 }
 
 function fillBusStats() {
@@ -468,23 +494,46 @@ function fillBusStats() {
   const line = byId("bus-state");
   line.className = "state-line " + bus.state;
   line.textContent = (STATE_LABEL[bus.state] || bus.state) + " · " + bus.seated + " sentados, " + bus.standing + " de pie" +
-    (bus.approx ? " · conteo aproximado" : "") + (bus.conf !== undefined ? " · confianza " + Math.round(bus.conf * 100) + " %" : "");
+    (bus.approx ? " · conteo aproximado" : "") + (bus.conf !== undefined ? " · confianza " + Math.round(bus.conf * 100) + " %" : "") +
+    (bus.emu ? " · emulado" : "");
 }
 
-async function loadCabin(id, box) {
-  try {
-    const data = await api("/buses/" + encodeURIComponent(id) + "/cabin");
-    if (!panelState || panelState.id !== id) return;
-    let plan = box.querySelector(".cabin");
+// Pinta la última lectura de la cabina en la vista elegida (plano o gemelo 3D).
+function showCabin(stage, view) {
+  const data = panelState && panelState.cabin;
+  if (view === "plan") {
+    let plan = stage.querySelector(".cabin");
+    if (!data) return;
     if (plan) Cabin.update(plan, data.occupied);
-    else { plan = Cabin.build(data.occupied); box.replaceChildren(plan); }
-    let note = box.querySelector(".notice");
-    if (!data.fresh) {
-      if (!note) { note = el("p", "notice"); box.append(note); }
-      note.textContent = "El plano no está al día: la última lectura es de las " + when(data.updated_at) + ". Se muestran los conteos.";
-    } else if (note) note.remove();
+    else stage.prepend(Cabin.build(data.occupied));
+  } else {
+    let frame = stage.querySelector("iframe");
+    if (!frame) {
+      frame = el("iframe", "twin");
+      frame.title = "Gemelo 3D de la cabina";
+      frame.src = "gemelo/index.html?embed=1&feed=parent" + (view === "3d" ? "" : "&view=" + view) + "#twin";
+      frame.addEventListener("load", () => showCabin(stage, view));
+      stage.prepend(frame);
+    }
+    const twin = frame.contentWindow && frame.contentWindow.__twin;
+    if (twin && data) twin.applyCabin(data);
+  }
+  let note = stage.querySelector(".notice");
+  if (data && !data.fresh) {
+    if (!note) { note = el("p", "notice"); stage.append(note); }
+    note.textContent = "La cabina no está al día: la última lectura es de las " + when(data.updated_at) + ". Se muestran los conteos.";
+  } else if (note) note.remove();
+}
+
+async function loadCabin(id, stage) {
+  try {
+    const data = Emu.cabin(id) || await api("/buses/" + encodeURIComponent(id) + "/cabin");
+    if (!panelState || panelState.id !== id) return;
+    panelState.cabin = data;
+    const pressed = stage.parentNode.querySelector(".seg-btn[aria-pressed=true]");
+    showCabin(stage, pressed ? pressed.dataset.view : "plan");
   } catch (err) {
-    box.replaceChildren(el("p", "notice", err.message));
+    stage.replaceChildren(el("p", "notice", err.message));
   }
 }
 
@@ -559,9 +608,11 @@ function showView(name) {
   document.querySelectorAll(".nav-link[aria-current]").forEach((b) => b.setAttribute("aria-current", "page"));
   byId("view-map").hidden = name !== "map";
   byId("view-ops").hidden = name !== "ops";
+  byId("view-emu").hidden = name !== "emu";
   closePanel(true);
   if (name === "map") map.invalidateSize();
-  else loadFindings();
+  else if (name === "ops") loadFindings();
+  else renderEmu();
 }
 
 async function loadFindings() {
@@ -612,6 +663,106 @@ byId("analysis-form").addEventListener("submit", async (event) => {
   }
 });
 
+// ---------------------------------------------------------------- emulación de la flota (todas las rutas)
+
+const emuRows = new Map();     // bus_id -> fila de la vista Emulación
+
+function renderEmu() {
+  const buses = Emu.list();
+  const kpis = byId("emu-kpis");
+  const grid = byId("emu-routes");
+  if (!buses.length) {
+    emuRows.clear();
+    kpis.replaceChildren();
+    const empty = el("div", "empty");
+    empty.append(el("strong", "", "La emulación está detenida"),
+      el("span", "", "Elige cuántos buses por ruta y el escenario, y pulsa «Iniciar emulación»."));
+    grid.replaceChildren(empty);
+    return;
+  }
+  const avg = Math.round(buses.reduce((n, b) => n + b.pct, 0) / buses.length);
+  const crowded = buses.filter((b) => b.state === "full" || b.state === "overcrowded").length;
+  const people = buses.reduce((n, b) => n + b.seated + b.standing, 0);
+  kpis.replaceChildren(...[[buses.length, "buses en servicio"], [avg + " %", "ocupación promedio"],
+    [people, "pasajeros a bordo"], [crowded, "llenos o con sobrecupo"]].map(([v, label]) => {
+    const box = el("div", "stat");
+    box.append(el("b", "", String(v)), el("span", "", label));
+    return box;
+  }));
+  if (!emuRows.size) {
+    // Primera vuelta: se arma la cuadrícula; después solo cambian los textos y las barras.
+    grid.replaceChildren();
+    const byRoute = new Map();
+    buses.forEach((b) => { if (!byRoute.has(b.route)) byRoute.set(b.route, []); byRoute.get(b.route).push(b); });
+    let i = 0;
+    for (const [routeId, list] of byRoute) {
+      const info = routes.get(routeId) || {};
+      const card = el("section", "emu-route");
+      card.style.setProperty("--c", info.color || "var(--accent)");
+      card.style.animationDelay = Math.min(i++, 12) * 30 + "ms";
+      const head = el("div", "emu-route-head");
+      head.append(el("span", "bullet"), el("strong", "", routeId), el("span", "muted", info.name || ""));
+      const rows = el("div", "emu-buses");
+      list.forEach((b) => {
+        const row = el("button", "emu-bus");
+        row.type = "button";
+        row.innerHTML = '<span class="emu-bus-top"><strong></strong><span class="state-line"></span></span><span class="bar"><span></span></span>';
+        row.addEventListener("click", () => openBus(b.bus));
+        rows.append(row);
+        emuRows.set(b.bus, row);
+      });
+      card.append(head, rows);
+      grid.append(card);
+    }
+  }
+  for (const b of buses) {
+    const row = emuRows.get(b.bus);
+    if (!row) continue;
+    row.querySelector("strong").textContent = "Bus " + b.bus + " · " + DIR_LABEL[b.dir];
+    const line = row.querySelector(".state-line");
+    line.className = "state-line " + b.state;
+    line.textContent = (STATE_LABEL[b.state] || b.state) + " · " + b.pct + " %";
+    const fill = row.querySelector(".bar > span");
+    fill.className = b.state;
+    fill.style.width = Math.min(100, b.pct) + "%";
+  }
+}
+
+Emu.onTick(() => {
+  render();
+  if (!byId("view-emu").hidden) renderEmu();
+});
+
+byId("emu-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.target;
+  const button = byId("emu-toggle");
+  if (Emu.running()) {
+    Emu.stop();
+    button.textContent = "Iniciar emulación";
+    button.classList.add("primary");
+    return;
+  }
+  button.disabled = true;
+  button.textContent = "Cargando recorridos…";
+  try {
+    const ids = [...routes.keys()];
+    await Promise.all(ids.map(ensurePath));
+    emuRows.clear();
+    Emu.start(ids.map((id) => ({ route_id: id, path: routes.get(id).path })), Number(form.per_route.value), form.scenario.value);
+    button.textContent = "Detener emulación";
+    button.classList.remove("primary");
+    toast(Emu.list().length + " buses emulados en " + ids.length + " rutas.");
+  } catch (err) {
+    toast(err.message);
+    button.textContent = "Iniciar emulación";
+  } finally {
+    button.disabled = false;
+  }
+});
+byId("emu-form").scenario.addEventListener("change", (e) => Emu.setScenario(e.target.value));
+byId("emu-form").on_map.addEventListener("change", (e) => { emuOnMap = e.target.checked; render(); });
+
 // ---------------------------------------------------------------- arranque, celular y salida
 
 byId("sheet-handle").addEventListener("click", () => {
@@ -653,6 +804,7 @@ function logout(notice) {
     }).catch(() => {});
   }
   if (socket) socket.close(1000);
+  Emu.stop();
   closePanel(true);
   feeds.clear();
   markers.forEach((m) => m.remove());

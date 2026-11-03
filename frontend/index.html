@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&display=swap">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-  <link rel="stylesheet" href="styles.css?v=3">
+  <link rel="stylesheet" href="styles.css?v=4">
 </head>
 <body>
   <a class="skip" href="#main">Saltar al contenido</a>
@@ -96,6 +96,7 @@
       <nav class="nav" aria-label="Principal">
         <button type="button" class="nav-link" data-view="map" aria-current="page">Mapa</button>
         <button type="button" class="nav-link" data-view="ops" id="nav-ops" hidden>Operación</button>
+        <button type="button" class="nav-link" data-view="emu">Emulación</button>
       </nav>
       <div class="topbar-end">
         <span id="status" class="status" data-state="off" role="status" aria-live="polite"><span class="dot" aria-hidden="true"></span><span class="status-text">Desconectado</span></span>
@@ -159,6 +160,29 @@
           <div id="analysis-result" class="result" aria-live="polite" hidden></div>
         </section>
       </section>
+
+      <!-- Emulación: buses ficticios en todas las rutas, solo en este navegador -->
+      <section id="view-emu" class="view-emu" hidden>
+        <div class="emu-head card">
+          <div class="emu-title">
+            <h2>Emulación de la flota</h2>
+            <p class="muted">Buses ficticios recorren el trazado real de cada ruta de Pasto y suben o bajan pasajeros cada 3 s.
+              Corre solo en este navegador: no cambia los datos reales ni lo ven otros usuarios.</p>
+          </div>
+          <form id="emu-form" class="emu-controls">
+            <label>Buses por ruta
+              <select name="per_route"><option>1</option><option selected>2</option><option>3</option><option>4</option></select>
+            </label>
+            <label>Escenario
+              <select name="scenario"><option value="valle">Hora valle</option><option value="normal" selected>Normal</option><option value="pico">Hora pico</option></select>
+            </label>
+            <label class="check"><input type="checkbox" name="on_map" checked> Mostrar en el mapa</label>
+            <button type="submit" id="emu-toggle" class="btn primary">Iniciar emulación</button>
+          </form>
+        </div>
+        <div class="emu-kpis" id="emu-kpis" aria-live="polite"></div>
+        <div id="emu-routes" class="emu-routes"></div>
+      </section>
     </main>
 
     <!-- HU-05: detalle del bus y cabina / HU-06: parada -->
@@ -179,7 +203,8 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
   <script src="config.js"></script>
-  <script src="cabin.js?v=3"></script>
-  <script src="app.js?v=3"></script>
+  <script src="cabin.js?v=4"></script>
+  <script src="emulation.js?v=4"></script>
+  <script src="app.js?v=4"></script>
 </body>
 </html>
