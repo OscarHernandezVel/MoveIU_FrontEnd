@@ -21,6 +21,7 @@ No necesita compilación: HTML + CSS + JavaScript y **Leaflet 1.9** (desde cdnjs
 * **Parada:** «este bus o el siguiente» en ida o regreso, con el recomendado resaltado.
 * **Estado:** En vivo / Conectando / Reconectando (los buses se atenúan mientras no hay datos frescos).
 * **Cabina 3D:** en el panel del bus, el plano o el gemelo 3D visto desde la cámara frontal, la trasera o libre.
+* **Simulación:** el botón «Iniciar simulación» de la barra superior (o el de la vista Emulación) la enciende; un aviso ámbar indica que está activa y «Salir» vuelve a los datos reales.
 * **Emulación:** buses ficticios en todas las rutas, con escenario (valle, normal, pico), indicadores de la flota y la opción de verlos en el mapa. No envía nada al backend.
 * **Operación** (solo administrador y auditor): hallazgos por reglas o IA y análisis de la flota.
 * **Accesibilidad:** el color nunca es la única señal, foco visible, navegación con teclado y `prefers-reduced-motion`.
