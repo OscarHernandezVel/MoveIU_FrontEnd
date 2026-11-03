@@ -18,7 +18,8 @@ No necesita compilación: HTML + CSS + JavaScript y **Leaflet 1.9** (desde cdnjs
 * **Acceso:** crear cuenta o entrar; si el correo ya existe, ofrece entrar con él. Al vencer la sesión avisa y vuelve al acceso.
 * **Mapa en vivo:** hasta 5 rutas; cada una dibuja su recorrido y sus paradas. Los buses se deslizan entre lecturas (cada 3 s) y la lista se ordena por más espacio primero.
 * **Bus:** ocupación, sillas libres, sitios de pie y el botón «Mostrar ocupación real del bus #…», que muestra el plano de la cabina y avisa si el plano no está al día.
-* **Parada:** «este bus o el siguiente» en ida o regreso, con el recomendado resaltado.
+* **Parada:** «este bus o el siguiente» en ida o regreso, con el recomendado resaltado y el tiempo estimado de llegada.
+* **¿A dónde vas?:** se eligen la parada de salida y la de llegada; muestra las rutas directas que pasan por las dos, con el próximo bus, cuándo llega y cuánto espacio trae (los transbordos aún no).
 * **Estado:** En vivo / Conectando / Reconectando (los buses se atenúan mientras no hay datos frescos).
 * **Cabina 3D:** en el panel del bus, el plano o el gemelo 3D visto desde la cámara frontal, la trasera o libre.
 * **Simulación:** el botón «Iniciar simulación» de la barra superior (o el de la vista Emulación) la enciende; un aviso ámbar indica que está activa y «Salir» vuelve a los datos reales.

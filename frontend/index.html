@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&display=swap">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-  <link rel="stylesheet" href="styles.css?v=7">
+  <link rel="stylesheet" href="styles.css?v=8">
 </head>
 <body>
   <a class="skip" href="#main">Saltar al contenido</a>
@@ -119,6 +119,21 @@
         <aside id="sheet" class="sheet" aria-label="Rutas y buses">
           <button type="button" id="sheet-handle" class="sheet-handle" aria-expanded="true" aria-controls="sheet-body"><span class="sr-only">Mostrar u ocultar la lista</span></button>
           <div id="sheet-body" class="sheet-body">
+            <section class="trip" aria-labelledby="trip-title">
+              <h2 id="trip-title">¿A dónde vas?</h2>
+              <form id="trip-form" class="trip-form">
+                <label>Desde
+                  <input name="from" list="stop-names" autocomplete="off" placeholder="Parada de salida" required>
+                </label>
+                <button type="button" id="trip-swap" class="icon-btn trip-swap" aria-label="Intercambiar salida y llegada">⇅</button>
+                <label>Hasta
+                  <input name="to" list="stop-names" autocomplete="off" placeholder="Parada de llegada" required>
+                </label>
+                <button type="submit" class="btn primary">Buscar</button>
+              </form>
+              <datalist id="stop-names"></datalist>
+              <ol id="trip-results" class="trip-results" aria-live="polite"></ol>
+            </section>
             <div class="section-head">
               <h2>Tus rutas</h2>
               <span id="route-count" class="muted">0 de 5</span>
@@ -211,8 +226,8 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
   <script src="config.js"></script>
-  <script src="cabin.js?v=7"></script>
-  <script src="emulation.js?v=7"></script>
-  <script src="app.js?v=7"></script>
+  <script src="cabin.js?v=8"></script>
+  <script src="emulation.js?v=8"></script>
+  <script src="app.js?v=8"></script>
 </body>
 </html>

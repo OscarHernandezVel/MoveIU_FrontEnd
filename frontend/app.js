@@ -68,6 +68,11 @@ function toast(text) {
   toastTimer = setTimeout(() => { box.hidden = true; }, 2600);
 }
 
+function etaText(minutes) {
+  if (!minutes) return "";
+  return minutes <= 1 ? "Llega en 1 min o menos" : "Llega en ~" + minutes + " min";
+}
+
 function when(value) {
   if (!value) return "";
   const date = typeof value === "number" ? new Date(value * 1000) : new Date(value);
@@ -233,12 +238,14 @@ async function showRoutes() {
     chip.style.setProperty("--c", routes.get(route.route_id).color);
     chip.setAttribute("aria-pressed", String(selected.has(route.route_id)));
     chip.title = route.name;
+    chip.dataset.route = route.route_id;
     chip.append(el("span", "bullet"), document.createTextNode(route.route_id));
     chip.addEventListener("click", () => toggleRoute(route.route_id, chip));
     box.append(chip);
   });
   [...selected].forEach((id) => routes.has(id) ? drawRoute(id) : selected.delete(id));
   countRoutes();
+  fillStopNames();
 }
 
 function countRoutes() { byId("route-count").textContent = selected.size + " de " + MAX_ROUTES; }
@@ -392,6 +399,89 @@ function emptyState() {
   return li;
 }
 
+// ---------------------------------------------------------------- planear un viaje de A a B (rutas directas)
+
+function fillStopNames() {
+  const names = new Set();
+  routes.forEach((r) => (r.stops || []).forEach((s) => names.add(s.name)));
+  byId("stop-names").replaceChildren(...[...names].sort((a, b) => a.localeCompare(b, "es")).map((n) => {
+    const o = document.createElement("option");
+    o.value = n;
+    return o;
+  }));
+}
+
+// Rutas que pasan por las dos paradas. El orden de las paradas es el de ida: si «desde» va antes, se viaja de ida;
+// si va después, de regreso (el regreso recorre las paradas al revés).
+function directTrips(fromName, toName) {
+  const trips = [];
+  routes.forEach((route, routeId) => {
+    const stops = route.stops || [];
+    const from = stops.find((s) => s.name === fromName);
+    const to = stops.find((s) => s.name === toName);
+    if (!from || !to || from.stop_id === to.stop_id) return;
+    const dir = from.order < to.order ? "outbound" : "return";
+    trips.push({ routeId, from, to, dir, stops: Math.abs(to.order - from.order) });
+  });
+  return trips.sort((a, b) => a.stops - b.stops).slice(0, 6);
+}
+
+async function planTrip(fromName, toName) {
+  const out = byId("trip-results");
+  if (!fromName || !toName) { out.replaceChildren(el("li", "notice", "Escribe la parada de salida y la de llegada.")); return; }
+  if (fromName === toName) { out.replaceChildren(el("li", "notice", "La salida y la llegada son la misma parada.")); return; }
+  const trips = directTrips(fromName, toName);
+  if (!trips.length) {
+    out.replaceChildren(el("li", "notice", "Ninguna ruta pasa por las dos paradas. Prueba con una parada cercana."));
+    return;
+  }
+  out.replaceChildren(el("li", "spinner"));
+  const results = await Promise.all(trips.map(async (trip) => {
+    try {
+      const q = "?route_id=" + encodeURIComponent(trip.routeId) + "&direction=" + trip.dir + "&limit=2";
+      const data = await api("/stops/" + encodeURIComponent(trip.from.stop_id) + "/next-buses" + q);
+      trip.bus = data.buses.find((b) => b.recommended) || data.buses[0] || null;
+    } catch (_) { trip.bus = null; }
+    return trip;
+  }));
+  // Primero los que tienen un bus en camino, por tiempo de llegada; luego los demás, por número de paradas.
+  results.sort((a, b) => (a.bus ? a.bus.eta_min : 1e9) - (b.bus ? b.bus.eta_min : 1e9) || a.stops - b.stops);
+  out.replaceChildren(...results.map((trip, i) => {
+    const li = el("li");
+    const card = el("button", "trip-card" + (i === 0 && trip.bus ? " best" : ""));
+    card.type = "button";
+    card.style.setProperty("--c", routes.get(trip.routeId).color);
+    const top = el("span", "bus-top");
+    top.append(el("strong", "", trip.routeId + " · " + DIR_LABEL[trip.dir]), el("span", "muted", trip.stops + (trip.stops === 1 ? " parada" : " paradas")));
+    if (i === 0 && trip.bus) top.append(el("span", "badge", "Mejor opción"));
+    card.append(top);
+    if (trip.bus) {
+      const occ = trip.bus.bus.occupancy;
+      card.append(el("span", "eta", "Bus " + trip.bus.bus.bus_id + " · " + etaText(trip.bus.eta_min).toLowerCase()),
+        el("span", "state-line " + occ.state, (occ.label || STATE_LABEL[occ.state]) + " · " + occ.percentage + " %"));
+    } else {
+      card.append(el("span", "muted", "Ningún bus en camino ahora mismo"));
+    }
+    card.append(el("span", "free", "Sube en " + trip.from.name + " · baja en " + trip.to.name));
+    card.addEventListener("click", () => {
+      const chip = document.querySelector('.chip[data-route="' + trip.routeId + '"]');
+      if (!selected.has(trip.routeId) && chip) toggleRoute(trip.routeId, chip);
+      openStop(trip.routeId, trip.from, trip.dir);
+    });
+    li.append(card);
+    return li;
+  }));
+}
+
+byId("trip-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  planTrip(event.target.from.value.trim(), event.target.to.value.trim());
+});
+byId("trip-swap").addEventListener("click", () => {
+  const f = byId("trip-form");
+  [f.from.value, f.to.value] = [f.to.value, f.from.value];
+});
+
 // ---------------------------------------------------------------- panel lateral
 
 function openPanel(kicker, title) {
@@ -538,7 +628,7 @@ async function loadCabin(id, stage) {
 }
 
 // HU-06: este bus o el siguiente, en una parada
-function openStop(routeId, stop) {
+function openStop(routeId, stop, startDir = "outbound") {
   openPanel("Parada · ruta " + routeId, stop.name);
   panelState = { kind: "stop", id: stop.stop_id, timer: null };
   const body = byId("panel-body");
@@ -547,10 +637,10 @@ function openStop(routeId, stop) {
   seg.setAttribute("aria-label", "Sentido");
   const list = el("div");
   list.style.cssText = "display:flex;flex-direction:column;gap:12px";
-  ["outbound", "return"].forEach((dir, i) => {
+  ["outbound", "return"].forEach((dir) => {
     const b = el("button", "seg-btn", dir === "outbound" ? "Ida" : "Regreso");
     b.type = "button";
-    b.setAttribute("aria-pressed", String(i === 0));
+    b.setAttribute("aria-pressed", String(dir === startDir));
     b.addEventListener("click", () => {
       seg.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
       loadNext(routeId, stop.stop_id, dir, list);
@@ -558,7 +648,7 @@ function openStop(routeId, stop) {
     seg.append(b);
   });
   body.append(seg, list);
-  loadNext(routeId, stop.stop_id, "outbound", list);
+  loadNext(routeId, stop.stop_id, startDir, list);
   panelState.timer = setInterval(() => {
     const dir = seg.querySelector('[aria-pressed="true"]').textContent === "Ida" ? "outbound" : "return";
     loadNext(routeId, stop.stop_id, dir, list, true);
@@ -586,6 +676,7 @@ async function loadNext(routeId, stopId, dir, list, quiet) {
       const fill = el("span", occ.state);
       bar.append(fill);
       card.append(top, el("span", "state-line " + occ.state, (occ.label || STATE_LABEL[occ.state]) + " · " + occ.percentage + " %"), bar,
+        el("span", "eta", etaText(item.eta_min)),
         el("span", "free", "A " + item.stops_remaining + " paradas · " + (item.distance_m >= 1000 ? (item.distance_m / 1000).toFixed(1) + " km" : item.distance_m + " m") +
           " · " + occ.free_seats + " sillas libres"));
       requestAnimationFrame(() => { fill.style.width = Math.min(100, occ.percentage) + "%"; });

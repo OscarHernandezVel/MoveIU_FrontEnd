@@ -275,6 +275,24 @@ label.check input { min-height: 0; width: 18px; height: 18px; accent-color: var(
 .emu-bus-top strong, .emu-bus-top .state-line { white-space: nowrap; }
 .emu-bus-top .state-line { font-size: 13px; }
 
+/* planear un viaje (de A a B) y tiempo de llegada */
+.trip { display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: var(--radius); background: var(--card); border: 1px solid var(--line); }
+.trip h2 { font-size: 18px; }
+.trip-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; }
+.trip-form label { grid-column: 1; }
+.trip-swap { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+.trip-form .btn { grid-column: 1 / -1; height: 44px; }
+.trip-form input { min-height: 44px; }
+.trip-results { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.trip-results:empty { display: none; }
+.trip-card { --c: var(--accent); width: 100%; text-align: left; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 14px;
+             border: 1px solid var(--line); border-left: 4px solid var(--c); background: var(--surface); animation: card-in .3s var(--ease) both;
+             transition: transform .2s var(--ease), border-color .2s var(--ease); }
+.trip-card:hover { transform: translateX(3px); }
+.trip-card.best { box-shadow: 0 0 0 1px var(--accent); }
+.trip-card .bus-top strong { font-size: 16px; }
+.eta { font-family: var(--display); font-weight: 700; color: var(--accent-text); }
+
 /* interruptor y aviso del modo simulación */
 .sim-btn { height: 40px; padding: 0 14px; border-color: var(--amber); color: var(--amber); font-weight: 600; }
 .sim-btn, .nav-link, .btn.ghost { white-space: nowrap; }
