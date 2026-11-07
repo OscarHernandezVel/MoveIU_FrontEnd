@@ -20,7 +20,6 @@ const STATE_LABEL = {
   full: "Lleno", overcrowded: "Sobrecupo", no_data: "Sin datos",
 };
 const DIR_LABEL = { outbound: "ida", return: "regreso" };
-const CABIN_VIEWS = [["plan", "Plano"], ["front", "3D frontal"], ["rear", "3D trasera"], ["3d", "3D libre"]];
 const SEVERITY = { low: "Baja", medium: "Media", high: "Alta", critical: "Crítica" };
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
@@ -866,24 +865,10 @@ function openBus(id) {
   const cabinBox = el("div", "cabin-box");
   cabinBox.id = "cabin-box";
   cabinBox.hidden = true;
-  // Plano 2D o gemelo 3D (gemelo/index.html): los dos se arman con los mismos identificadores de posición.
-  const views = el("div", "seg");
-  views.setAttribute("role", "group");
-  views.setAttribute("aria-label", "Vista de la cabina");
+  // Gemelo 3D libre (gemelo/index.html), girable 360°; si el navegador no tiene WebGL, el plano 2D.
+  // Los dos se arman con los mismos identificadores de posición: ninguna imagen sale del bus.
   const stage = el("div", "cabin-stage");
-  CABIN_VIEWS.forEach(([key, label]) => {
-    const b = el("button", "seg-btn", label);
-    b.type = "button";
-    b.dataset.view = key;
-    b.setAttribute("aria-pressed", String(key === "front"));  // se abre en 3D, desde la cámara frontal
-    b.addEventListener("click", () => {
-      views.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
-      stage.replaceChildren();
-      showCabin(stage, key);
-    });
-    views.append(b);
-  });
-  cabinBox.append(views, stage);
+  cabinBox.append(stage);
   const privacy = el("p", "privacy");
   privacy.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg>';
   privacy.append("Plano armado con identificadores de posición. Ninguna imagen ni rostro sale del bus." +
@@ -925,28 +910,36 @@ function fillBusStats() {
 }
 
 // Pinta la última lectura de la cabina en la vista elegida (plano o gemelo 3D).
-function showCabin(stage, view) {
+function showCabin(stage) {
   const data = panelState && panelState.cabin;
-  if (view === "plan") {
+  if (panelState && panelState.noGl) {
     let plan = stage.querySelector(".cabin");
-    if (!data) return;
-    if (plan) Cabin.update(plan, data.occupied);
-    else stage.prepend(Cabin.build(data.occupied));
+    if (data) { if (plan) Cabin.update(plan, data.occupied); else stage.prepend(Cabin.build(data.occupied)); }
   } else {
     let frame = stage.querySelector("iframe");
     if (!frame) {
       frame = el("iframe", "twin");
-      frame.title = "Gemelo 3D de la cabina";
-      frame.src = "gemelo/index.html?embed=1&feed=parent" + (view === "3d" ? "" : "&view=" + view) + "#twin";
-      frame.addEventListener("load", () => showCabin(stage, view));
+      frame.title = "Gemelo 3D de la cabina: arrastra para girarlo 360°, rueda o pellizco para acercar";
+      frame.src = "gemelo/index.html?embed=1&feed=parent&spin=1#twin";
+      frame.addEventListener("load", () => {
+        // Sin WebGL (aceleración por hardware apagada) el gemelo no puede dibujar: se pasa al plano y se explica.
+        const nogl = frame.contentDocument && frame.contentDocument.getElementById("nogl");
+        if (nogl && !nogl.hidden && panelState) {
+          panelState.noGl = true;
+          frame.remove();
+          stage.prepend(el("p", "notice", "Tu navegador no puede mostrar el 3D: tiene desactivada la aceleración por hardware (WebGL). " +
+            "Actívala en Configuración › Sistema › «Usar aceleración por hardware» y reinicia el navegador. Mientras tanto, este es el plano de la cabina."));
+        }
+        showCabin(stage);
+      });
       stage.prepend(frame);
     }
     const twin = frame.contentWindow && frame.contentWindow.__twin;
     if (twin && data) twin.applyCabin(data);
   }
-  let note = stage.querySelector(".notice");
+  let note = stage.querySelector(".notice.stale");
   if (data && !data.fresh) {
-    if (!note) { note = el("p", "notice"); stage.append(note); }
+    if (!note) { note = el("p", "notice stale"); stage.append(note); }
     note.textContent = "La cabina no está al día: la última lectura es de las " + when(data.updated_at) + ". Se muestran los conteos.";
   } else if (note) note.remove();
 }
@@ -956,8 +949,7 @@ async function loadCabin(id, stage) {
     const data = Emu.cabin(id) || await api("/buses/" + encodeURIComponent(id) + "/cabin");
     if (!panelState || panelState.id !== id) return;
     panelState.cabin = data;
-    const pressed = stage.parentNode.querySelector(".seg-btn[aria-pressed=true]");
-    showCabin(stage, pressed ? pressed.dataset.view : "plan");
+    showCabin(stage);
   } catch (err) {
     stage.replaceChildren(el("p", "notice", err.message));
   }

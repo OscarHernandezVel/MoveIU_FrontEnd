@@ -834,6 +834,13 @@ if (!feedParent) applyCabin(simSnapshot()); setBadge();
 activate(location.hash === '#twin' || q.get('embed') === '1' ? 'twin' : 'arch');
 if (q.get('view') === 'front' || q.get('view') === 'rear') cameraView(q.get('view'));
 if (q.get('live') === '1') liveStart();
+if (q.get('embed') === '1') $('nogl').textContent = 'Este navegador no puede mostrar el 3D: active la aceleración por hardware (WebGL) y vuelva a cargar.';
+// spin=1 (dentro de MoveIU): vista libre que da una vuelta lenta hasta que la persona arrastra o acerca.
+if (q.get('spin') === '1' && !reduceMotion) {
+  var spinning = true, stopSpin = function () { spinning = false; };
+  canvas.addEventListener('pointerdown', stopSpin); canvas.addEventListener('wheel', stopSpin);
+  twin.tick.push(function (dt) { if (spinning && current === twin) { twin.goal.theta += dt * 0.25; twin.o.theta = twin.goal.theta; } });
+}
 requestAnimationFrame(frame);
 window.__twin = { view: function (o) { Object.assign(twin.goal, o); }, applyCabin: applyCabin, snapshot: function () { return cabin.payload; }, figures: function () { return Object.keys(figures).length; } };
 })();
