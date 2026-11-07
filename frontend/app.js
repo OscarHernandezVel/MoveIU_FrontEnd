@@ -419,7 +419,7 @@ async function drawRoute(id, fly) {
   (route.stops || []).forEach((stop, i) => {
     const dot = L.circleMarker([stop.location.lat, stop.location.lng], {
       radius: 6, weight: 3, color: route.color, fillColor: "#FFFFFF", fillOpacity: 1, className: "stop-dot",
-    }).bindTooltip(stop.name).on("click", () => openStop(id, stop)).addTo(group);
+    }).bindTooltip(stop.name).on("click", (e) => (picking ? pickDestination(e.latlng) : openStop(id, stop))).addTo(group);
     const node = dot.getElement();
     if (node) node.style.animationDelay = Math.min(i, 40) * 15 + "ms";
   });
@@ -432,7 +432,7 @@ function renderCityStops() {
   const canvas = L.canvas({ padding: 0.3 });
   cityStops = L.layerGroup(stopIndex.map((entry) => L.circleMarker([entry.stop.location.lat, entry.stop.location.lng], {
     renderer: canvas, radius: 4, weight: 1.5, color: "#A0947F", fillColor: "#FFFFFF", fillOpacity: 0.9,
-  }).bindTooltip(entry.stop.name + " · " + entry.routes.join(", ")).on("click", () => openStop(entry.routes[0], entry.stop)))).addTo(map);
+  }).bindTooltip(entry.stop.name + " · " + entry.routes.join(", ")).on("click", (e) => (picking ? pickDestination(e.latlng) : openStop(entry.routes[0], entry.stop))))).addTo(map);
 }
 
 // ---------------------------------------------------------------- HU-04 buses en vivo
@@ -444,9 +444,12 @@ function liveBuses() {
   return list.sort((a, b) => a.pct - b.pct);
 }
 
+// El bus del logo de MoveIU (el de la presentación y la pestaña del navegador), en blanco sobre el color de su ocupación.
+const BUS_GLYPH = '<svg viewBox="0 0 24 24" aria-hidden="true" class="bus-glyph"><rect x="5" y="3" width="14" height="13" rx="3"/><path d="M5 10h14"/><circle cx="9" cy="19.5" r="1.4" class="w"/><circle cx="15" cy="19.5" r="1.4" class="w"/></svg>';
+
 function pinHtml(bus) {
   return '<div class="bus-pin ' + bus.state + (panelState && panelState.id === bus.bus ? " selected" : "") +
-    '"><span class="pill">' + icon(bus.state) + bus.bus + " · " + bus.pct + ' %</span><span class="stem"></span></div>';
+    '"><span class="pill">' + BUS_GLYPH + bus.bus + " · " + bus.pct + ' %</span><span class="stem"></span></div>';
 }
 
 function glide(marker, to) {
@@ -601,6 +604,44 @@ function suggest(input, list) {
   input.addEventListener("blur", () => setTimeout(() => { list.hidden = true; }, 120));
   input.addEventListener("keydown", (e) => { if (e.key === "Escape") list.hidden = true; });
 });
+
+// «Elegir destino manualmente»: el siguiente toque en el mapa fija el destino en la parada más cercana a ese punto.
+let picking = false, destMarker = null;
+
+function setPicking(on) {
+  picking = on;
+  byId("pick-dest").setAttribute("aria-pressed", String(on));
+  byId("pick-band").hidden = !on;
+  document.body.classList.toggle("picking", on);
+  if (on && window.innerWidth <= 720) byId("sheet").classList.add("collapsed");  // en el celular, el mapa a la vista
+}
+
+function pickDestination(latlng) {
+  if (!picking) return;
+  setPicking(false);
+  if (!stopIndex.length) { toast("Todavía no hay paradas cargadas."); return; }
+  const ranked = stopIndex.map((entry) => ({ entry, m: latlng.distanceTo([entry.stop.location.lat, entry.stop.location.lng]) }))
+    .sort((a, b) => a.m - b.m);
+  // Mejor una parada un poco más lejos (hasta 500 m más) por la que pase una ruta desde el origen, que la más
+  // cercana sin conexión directa: así el viaje tiene respuesta.
+  const fromKey = norm(byId("trip-from").value);
+  const fromRoutes = new Set(stopIndex.filter((e) => e.key === fromKey).flatMap((e) => e.routes));
+  const near = (fromRoutes.size && ranked.find((x) => x.m <= ranked[0].m + 500 && x.entry.routes.some((r) => fromRoutes.has(r)))) || ranked[0];
+  byId("trip-to").value = near.entry.stop.name;
+  if (destMarker) destMarker.remove();
+  destMarker = L.layerGroup([
+    L.polyline([latlng, [near.entry.stop.location.lat, near.entry.stop.location.lng]], { color: "#E05018", weight: 3, dashArray: "4 8", interactive: false }),
+    L.marker(latlng, { icon: L.divIcon({ className: "", html: '<div class="dest-pin" aria-hidden="true"></div>', iconSize: [30, 38], iconAnchor: [15, 36] }), title: "Tu destino", keyboard: false }),
+  ]).addTo(map);
+  byId("sheet").classList.remove("collapsed");
+  openPlanner(true);
+  toast("Destino: parada " + near.entry.stop.name + (near.m > 30 ? ", a " + walk(near.m) + " de donde marcaste" : "") + ".");
+  if (byId("trip-from").value) byId("trip-form").requestSubmit();
+}
+
+byId("pick-dest").addEventListener("click", () => setPicking(!picking));
+byId("pick-cancel").addEventListener("click", () => setPicking(false));
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && picking) setPicking(false); });
 
 function openPlanner(open) {
   const trip = byId("trip");
@@ -1331,6 +1372,7 @@ async function start() {
     }).addTo(map);
   }
   requestAnimationFrame(() => map.invalidateSize());
+  if (!map._pickReady) { map.on("click", (e) => pickDestination(e.latlng)); map._pickReady = true; }
   try { await showRoutes(); } catch (err) { toast(err.message); }
   render();
   connect();
