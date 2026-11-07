@@ -927,9 +927,17 @@ function fillBusStats() {
 }
 
 // Pinta la última lectura de la cabina en la vista elegida (plano o gemelo 3D).
+// ¿Puede este navegador dibujar con WebGL? Sin él, la vista 3D usa la cabina hecha con CSS (cabin3d.js).
+const HAS_WEBGL = (() => {
+  try { const c = document.createElement("canvas"); return !!(c.getContext("webgl2") || c.getContext("webgl")); } catch (_) { return false; }
+})();
+
 function showCabin(stage) {
   const data = panelState && panelState.cabin;
-  if (panelState && (panelState.noGl || panelState.view === "plan")) {
+  if (panelState && panelState.view === "3d" && (panelState.noGl || !HAS_WEBGL)) {
+    let scene = stage.querySelector(".c3");
+    if (data) { if (scene) Cabin3D.update(scene, data.occupied); else stage.prepend(Cabin3D.build(data.occupied)); }
+  } else if (panelState && panelState.view === "plan") {
     let plan = stage.querySelector(".cabin");
     if (data) { if (plan) Cabin.update(plan, data.occupied); else stage.prepend(Cabin.build(data.occupied)); }
   } else {
@@ -939,19 +947,11 @@ function showCabin(stage) {
       frame.title = "Gemelo 3D de la cabina: arrastra para girarlo 360°, rueda o pellizco para acercar";
       frame.src = "gemelo/index.html?embed=1&feed=parent&spin=1#twin";
       frame.addEventListener("load", () => {
-        // Sin WebGL (aceleración por hardware apagada) el gemelo no puede dibujar: se pasa al plano y se explica.
+        // El navegador dijo tener WebGL pero el gemelo no pudo iniciarlo: se usa la cabina hecha con CSS.
         const nogl = frame.contentDocument && frame.contentDocument.getElementById("nogl");
         if (nogl && !nogl.hidden && panelState) {
           panelState.noGl = true;
-          panelState.view = "plan";
           frame.remove();
-          const views = stage.parentNode && stage.parentNode.querySelector(".cabin-views");
-          if (views) views.querySelectorAll("button").forEach((x) => {
-            x.setAttribute("aria-pressed", String(x.dataset.view === "plan"));
-            if (x.dataset.view === "3d") { x.disabled = true; x.title = "Este navegador no tiene WebGL"; }
-          });
-          stage.prepend(el("p", "notice", "Tu navegador no puede mostrar el 3D: tiene desactivada la aceleración por hardware (WebGL). " +
-            "Actívala en Configuración › Sistema › «Usar aceleración por hardware» y reinicia el navegador. Mientras tanto, este es el plano de la cabina."));
         }
         showCabin(stage);
       });

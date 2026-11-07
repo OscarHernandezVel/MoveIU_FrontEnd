@@ -522,3 +522,33 @@ iframe.twin { width: 100%; height: 380px; border: 1px solid var(--line); border-
 @media (prefers-reduced-motion: reduce) {
   .tour-target, .me-dot, .skeleton span { animation: none !important; }
 }
+
+/* ---------------------------------------------------------------- cabina 3D con CSS (respaldo sin WebGL) */
+.c3 { position: relative; height: 380px; border-radius: 18px; border: 1px solid var(--line); overflow: hidden; perspective: 900px; cursor: grab; touch-action: none;
+      background: radial-gradient(ellipse at 50% 35%, var(--card-2), var(--bg)); animation: card-in .3s var(--ease) both; }
+.c3.drag { cursor: grabbing; }
+.c3:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
+.c3-world, .c3-world * { position: absolute; left: 0; top: 0; transform-style: preserve-3d; }
+.c3-world { left: 50%; top: 48%; }
+.c3-face { backface-visibility: visible; }
+.c3-floor { background: color-mix(in srgb, var(--fg) 8%, var(--card)); border-radius: 6px;
+            background-image: linear-gradient(90deg, color-mix(in srgb, var(--fg) 10%, transparent) 1px, transparent 1px); background-size: 40px 100%; }
+.c3-wall { background: color-mix(in srgb, #9FC6E8 22%, transparent); border: 1px solid color-mix(in srgb, #9FC6E8 50%, transparent); }
+.c3-wall.front { background: color-mix(in srgb, #9FC6E8 35%, transparent); }
+.c3-door { background: color-mix(in srgb, var(--amber) 55%, transparent); border: 2px solid var(--amber); }
+/* silla libre en verde, ocupada en rojo; respaldo más oscuro */
+.c3-seat .c3-box { --c: var(--ok); }
+.c3-seat.on .c3-box { --c: var(--bad); }
+.c3-seat .back { --c: color-mix(in srgb, var(--ok) 70%, #000); }
+.c3-seat.on .back { --c: color-mix(in srgb, var(--bad) 70%, #000); }
+.c3-face.top { background: var(--c); }
+.c3-face.side { background: color-mix(in srgb, var(--c) 78%, #000); }
+.c3-face.end { background: color-mix(in srgb, var(--c) 62%, #000); }
+.c3-stand { border: 2px dashed var(--amber); border-radius: 6px; transition: background .3s var(--ease); }
+.c3-stand.on { background: color-mix(in srgb, var(--amber) 35%, transparent); border-style: solid; }
+.c3-person { display: none; }
+.c3-person.on { display: block; }
+.c3-person .body { --c: #3B5BA9; }
+.c3-person .head { --c: #F2C230; }
+.c3-hint { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); padding: 4px 10px; border-radius: 999px; background: color-mix(in srgb, var(--surface) 85%, transparent);
+           font-size: 12px; color: var(--soft); white-space: nowrap; pointer-events: none; transform-style: flat; }
