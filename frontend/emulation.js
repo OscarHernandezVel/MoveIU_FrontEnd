@@ -40,20 +40,26 @@ window.Emu = (() => {
     return { lat: path[i - 1].lat + (path[i].lat - path[i - 1].lat) * k, lng: path[i - 1].lng + (path[i].lng - path[i - 1].lng) * k };
   }
 
-  // Ajusta un conjunto de posiciones a la cantidad pedida moviendo pocas: la cabina cambia de a poco, como en un bus real.
+  // Ajusta un conjunto de posiciones a la cantidad pedida: solo suben o bajan las que hacen falta.
+  // Nadie cambia de silla «por arte de magia»: una posición solo se ocupa o se libera.
   function settle(set, pool, goal) {
     while (set.size < goal) set.add(pick(pool.filter((id) => !set.has(id))));
     while (set.size > goal) set.delete(pick([...set]));
-    if (set.size && set.size < pool.length && Math.random() < 0.3) {
-      set.delete(pick([...set]));
-      set.add(pick(pool.filter((id) => !set.has(id))));
-    }
   }
 
+  // Entre paradas el bus avanza con la misma gente; al detenerse en una parada unos bajan y otros suben.
   function step(bus) {
     const length = bus.cum[bus.cum.length - 1];
-    bus.s += bus.speed * 3;
-    if (bus.s >= length) { bus.s -= length; bus.dir = bus.dir === "outbound" ? "return" : "outbound"; }
+    if (bus.dwell > 0) {
+      bus.dwell -= 1;
+    } else {
+      bus.s += bus.speed * 3;
+      if (bus.s >= length) { bus.s -= length; bus.dir = bus.dir === "outbound" ? "return" : "outbound"; }
+      bus.untilStop -= 1;
+      if (bus.untilStop > 0) return;
+      bus.untilStop = 3 + Math.floor(Math.random() * 4);  // la siguiente parada, en 9 a 18 s
+      bus.dwell = 1;                                       // 3 s detenido
+    }
     const progress = bus.s / length;
     const target = CAPACITY * SCENARIOS[scenario] * (0.45 + 0.55 * Math.sin(Math.PI * progress)) * bus.mood;
     bus.people = Math.max(0, Math.round(bus.people + Math.sign(target - bus.people) * rand(0, 4) + rand(-1.5, 1.5)));
@@ -72,7 +78,7 @@ window.Emu = (() => {
       bus: bus.id, route: bus.route, dir: bus.dir, lat: where.lat, lng: where.lng,
       pct: Math.round(bus.people / CAPACITY * 100), state: st, seated, standing: standing + bus.oop,
       free_seats: SEATS.length - seated, free_standing: STANDS.length - standing,
-      conf: 0.93, approx: false, off_route: false, ts: Date.now() / 1000, emu: true,
+      conf: 0.93, approx: false, off_route: false, ts: Date.now() / 1000, emu: true, at_stop: bus.dwell > 0,
     };
   }
 
@@ -104,8 +110,10 @@ window.Emu = (() => {
           id, route: route.route_id, path: route.path, cum, dir: "outbound",
           s: cum[cum.length - 1] * (n - 1 + Math.random() * 0.5) / perRoute,
           speed: rand(5, 8.5), mood: rand(0.75, 1.15), people: 0, oop: 0, seats: new Set(), stands: new Set(),
+          dwell: 0, untilStop: 1 + n,
         };
         bus.people = Math.round(CAPACITY * SCENARIOS[scenario] * bus.mood * 0.7);
+        bus.dwell = 1;  // arranca en una parada, para llenar la cabina de entrada
         step(bus);
         buses.set(id, bus);
       }
