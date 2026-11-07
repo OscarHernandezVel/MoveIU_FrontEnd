@@ -552,3 +552,19 @@ iframe.twin { width: 100%; height: 380px; border: 1px solid var(--line); border-
 .c3-person .head { --c: #F2C230; }
 .c3-hint { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); padding: 4px 10px; border-radius: 999px; background: color-mix(in srgb, var(--surface) 85%, transparent);
            font-size: 12px; color: var(--soft); white-space: nowrap; pointer-events: none; transform-style: flat; }
+
+/* subir y bajar: quien se levanta se marca en ámbar con una flecha hacia la salida y luego queda libre (verde);
+   quien se sienta entra con un pulso (rojo) */
+.seat.leaving, .stand.leaving { background: var(--warn); border-color: var(--warn-text); position: relative; animation: leave 2.2s var(--ease) both; }
+.seat.leaving::after, .stand.leaving::after { content: "↘"; position: absolute; inset: 0; display: grid; place-items: center; color: var(--warn-ink); font-weight: 800; font-size: 14px; }
+@keyframes leave { 0% { transform: scale(1.06); } 70% { opacity: 1; } 100% { opacity: .5; transform: translateX(6px); } }
+.seat.entering, .stand.entering { animation: enter 1.6s var(--ease) both; }
+@keyframes enter { 0% { transform: scale(.6); box-shadow: 0 0 0 0 color-mix(in srgb, var(--bad) 60%, transparent); } 50% { transform: scale(1.08); } 100% { transform: none; box-shadow: 0 0 0 10px transparent; } }
+.cabin-legend .k-leave { background: var(--warn); }
+.door { font-weight: 700; }
+.cabin-activity { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; font-size: 14px; color: var(--soft); min-height: 22px; }
+.cabin-activity b { font-weight: 800; }
+.cabin-activity .up { color: var(--ok-text); } .cabin-activity .down { color: var(--warn-text); }
+.cabin-activity .stop { padding: 3px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-text); font-weight: 700; font-size: 12px; }
+.c3-person.walking { transition: transform 1.6s linear; }
+@media (prefers-reduced-motion: reduce) { .c3-person.walking { transition: none; } }

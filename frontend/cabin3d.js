@@ -9,6 +9,9 @@ window.Cabin3D = (() => {
   const SEAT = 30, ROW = 40, X0 = 46;
   const Y = { L1: 10, L2: 44, P: 84, R2: 126, R1: 160 };
   const WIDTH = 200, LENGTH = X0 + 11 * ROW + 10;
+  // Puertas a la derecha: se sube por la delantera (fila 1) y se baja por la trasera (fila 10).
+  const ENTRY = { x: X0 + 2, y: WIDTH + 14 }, EXIT = { x: X0 + 9 * ROW + 2, y: WIDTH + 14 };
+  const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const div = (cls, style) => {
     const node = document.createElement("div");
@@ -58,7 +61,7 @@ window.Cabin3D = (() => {
       node.append(box(x, y, 0, SEAT, SEAT, 10, "cushion"), box(x + SEAT - 6, y, 10, 6, SEAT, 24, "back"));
       const who = person(x, y, true);
       world.append(node, who);
-      positions.set(id, { node, person: who });
+      positions.set(id, { node, person: who, x, y });
     };
     for (let n = 1; n <= 10; n++) {
       const r = String(n).padStart(2, "0"), x = X0 + (n - 1) * ROW;
@@ -70,13 +73,13 @@ window.Cabin3D = (() => {
       const spot = div("c3-stand", "width:" + SEAT + "px;height:" + SEAT + "px;transform:translate3d(" + x + "px," + (Y.P + 2) + "px,1px)");
       const who = person(x, Y.P + 2, false);
       world.append(spot, who);
-      positions.set("P" + r, { node: spot, person: who });
+      positions.set("P" + r, { node: spot, person: who, x, y: Y.P + 2 });
     }
     const benchX = X0 + 10 * ROW;
     for (let t = 1; t <= 5; t++) seat("S11-T" + t, benchX, 6 + (t - 1) * 38);
 
     scene.append(world, div("c3-hint", "") );
-    scene.lastChild.textContent = "Arrastra para girar · rueda o pellizco para acercar";
+    scene.lastChild.textContent = "Entrada adelante · salida atrás · arrastra para girar";
     const view = { theta: -35, tilt: 58, zoom: 0.72, spin: !matchMedia("(prefers-reduced-motion: reduce)").matches };
     const place = () => {
       world.style.transform = "scale(" + view.zoom + ") rotateX(" + view.tilt + "deg) rotateZ(" + view.theta + "deg) translate(" + -LENGTH / 2 + "px," + -WIDTH / 2 + "px)";
@@ -123,17 +126,40 @@ window.Cabin3D = (() => {
     requestAnimationFrame(spin);
 
     scene._positions = positions;
-    update(scene, occupied);
+    update(scene, occupied, true);
     return scene;
   }
 
-  function update(scene, occupied) {
+  // Compara con la lectura anterior: quien sube entra caminando desde la puerta delantera hasta su puesto, y quien
+  // baja camina hasta la trasera y desaparece. Devuelve cuántos subieron y bajaron.
+  function update(scene, occupied, first) {
     const taken = new Set(occupied || []);
-    scene._positions.forEach(({ node, person }, id) => {
-      node.classList.toggle("on", taken.has(id));
-      person.classList.toggle("on", taken.has(id));
+    let boarded = 0, alighted = 0;
+    scene._positions.forEach((pos, id) => {
+      const on = taken.has(id), was = pos.node.classList.contains("on");
+      if (on === was) return;
+      const p = pos.person;
+      clearTimeout(p._walk);
+      pos.node.classList.toggle("on", on);
+      if (first || REDUCED) { p.classList.toggle("on", on); return; }
+      if (on) {
+        boarded++;
+        p.classList.remove("walking");
+        p.style.transform = "translate3d(" + (ENTRY.x - pos.x) + "px," + (ENTRY.y - pos.y) + "px,0)";
+        p.classList.add("on");
+        void p.offsetWidth;
+        p.classList.add("walking");
+        p.style.transform = "";
+        p._walk = setTimeout(() => p.classList.remove("walking"), 1700);
+      } else {
+        alighted++;
+        p.classList.add("walking");
+        p.style.transform = "translate3d(" + (EXIT.x - pos.x) + "px," + (EXIT.y - pos.y) + "px,0)";
+        p._walk = setTimeout(() => { p.classList.remove("on", "walking"); p.style.transform = ""; }, 1700);
+      }
     });
     scene.setAttribute("aria-label", "Cabina en 3D: " + taken.size + " posiciones ocupadas. Arrastra o usa las flechas para girarla.");
+    return { boarded, alighted };
   }
 
   return { build, update };
