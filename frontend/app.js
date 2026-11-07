@@ -8,7 +8,13 @@ const API = (cfg.apiBaseUrl || window.location.origin).replace(/\/+$/, "");
 const WS_URL = API.replace(/^http/, "ws") + "/ws/v1/buses/stream";
 const MAX_ROUTES = 5;
 const GLIDE_MS = 2800;
-const ROUTE_COLORS = ["#2EE6C5", "#FFB547", "#7C8CFF", "#F472B6", "#34D399", "#60A5FA", "#F97316", "#A3E635", "#C084FC", "#FDE047"];
+// Colores de ruta que se distinguen sobre el mapa claro y no se confunden con los de ocupación.
+const ROUTE_COLORS = ["#0072B5", "#E05018", "#7B2CBF", "#00897B", "#C2185B", "#5D4037", "#1565C0", "#AD1457", "#6A8E00", "#EF6C00"];
+// Icono de cada estado: la ocupación nunca depende solo del color (UX-07).
+const STATE_ICON = {
+  available_seats: "M5 12h14M12 5v14", standing_only: "M12 4v16M8 8l4-4 4 4",
+  full: "M6 6l12 12M18 6 6 18", overcrowded: "M12 3v10M12 18v.5", no_data: "M8 12h8",
+};
 const STATE_LABEL = {
   available_seats: "Sillas disponibles", standing_only: "Solo de pie",
   full: "Lleno", overcrowded: "Sobrecupo", no_data: "Sin datos",
@@ -31,7 +37,7 @@ const routes = new Map();      // route_id -> { name, color, stops, path?, layer
 const feeds = new Map();       // route_id -> { seq, buses: Map(bus_id -> bus) }
 const markers = new Map();     // bus_id -> marcador de Leaflet
 const cards = new Map();       // bus_id -> <li> de la lista
-const selected = new Set((cfg.defaultRoutes || []).slice(0, MAX_ROUTES));
+const selected = new Set((kept("routes") || cfg.defaultRoutes || []).slice(0, MAX_ROUTES));
 let socket = null, reconnectDelay = 1000, refreshTimer = null, map = null;
 let panelState = null;         // { kind: "bus", id, timer } | { kind: "stop", ... }
 let toastTimer = null;
@@ -43,6 +49,12 @@ function store(key, value) {
   try { value === null ? sessionStorage.removeItem(key) : sessionStorage.setItem(key, value); } catch (_) {}
 }
 function load(key) { try { return sessionStorage.getItem(key); } catch (_) { return null; } }
+// Preferencias de este navegador (rutas elegidas, paradas favoritas, recorrido visto): localStorage, en JSON.
+function keep(key, value) { try { localStorage.setItem("moveiu_" + key, JSON.stringify(value)); } catch (_) {} }
+function kept(key) { try { return JSON.parse(localStorage.getItem("moveiu_" + key)); } catch (_) { return null; } }
+const norm = (text) => String(text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+const routeKind = (id) => (id.startsWith("E") ? "Estratégica" : "Complementaria");
+const icon = (state) => '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="' + (STATE_ICON[state] || STATE_ICON.no_data) + '"/></svg>';
 
 async function api(path, options = {}) {
   const headers = { "Content-Type": "application/json", "Accept-Language": "es", ...(options.headers || {}) };
@@ -59,9 +71,15 @@ async function api(path, options = {}) {
   return body;
 }
 
-function toast(text) {
+function toast(text, action) {
   const box = byId("toast");
   box.textContent = text;
+  if (action) {  // p. ej. «Deshacer» al quitar una parada favorita
+    const b = el("button", "undo", action.label);
+    b.type = "button";
+    b.addEventListener("click", () => { box.hidden = true; action.run(); });
+    box.append(b);
+  }
   box.hidden = false;
   box.style.animation = "none"; void box.offsetWidth; box.style.animation = "";
   clearTimeout(toastTimer);
@@ -171,7 +189,29 @@ byId("register-form").addEventListener("submit", (event) => {
 
 // ---------------------------------------------------------------- HU-07 estado de la conexión
 
+let wasDown = false, bandTimer = null;
+function connBand(state) {
+  const band = byId("conn-band");
+  clearTimeout(bandTimer);
+  if (state === "down") {
+    wasDown = true;
+    band.className = "conn-band";
+    band.innerHTML = '<span class="spin" aria-hidden="true"></span>Sin conexión · reintentando';
+    band.hidden = false;
+  } else if (state === "live" && wasDown) {
+    wasDown = false;
+    band.className = "conn-band ok";
+    band.textContent = "De nuevo en vivo";
+    band.hidden = false;
+    bandTimer = setTimeout(() => { band.hidden = true; }, 2500);
+  } else if (state === "off") {
+    wasDown = false;
+    band.hidden = true;
+  }
+}
+
 function setStatus(state, text) {
+  connBand(state === "reconnecting" ? "down" : state);
   const pill = byId("status");
   pill.dataset.state = state;
   pill.querySelector(".status-text").textContent = text;
@@ -226,50 +266,118 @@ function handle(msg) {
 
 // ---------------------------------------------------------------- HU-03 rutas y recorrido
 
+let stopIndex = [];            // paradas únicas de todas las rutas: { stop, key, routes: [route_id] }
+let cityStops = null;          // todas las paradas, tenues, cuando no hay rutas elegidas (UX-02)
+
 async function showRoutes() {
   const data = await api("/routes");
-  const box = byId("routes");
-  box.replaceChildren();
   // C1, C2 … C16 y luego E1 … E7: orden natural, no de texto (C10 iba antes que C2)
   const sorted = (data.routes || []).slice().sort((a, b) => a.route_id.localeCompare(b.route_id, "es", { numeric: true }));
+  const byStop = new Map();
   sorted.forEach((route, index) => {
     const info = routes.get(route.route_id) || {};
-    routes.set(route.route_id, { ...info, name: route.name, stops: route.stops, color: ROUTE_COLORS[index % ROUTE_COLORS.length] });
-    const chip = el("button", "chip");
-    chip.type = "button";
-    chip.style.setProperty("--c", routes.get(route.route_id).color);
-    chip.setAttribute("aria-pressed", String(selected.has(route.route_id)));
-    chip.title = route.name;
-    chip.dataset.route = route.route_id;
-    chip.append(el("span", "bullet"), document.createTextNode(route.route_id));
-    chip.addEventListener("click", () => toggleRoute(route.route_id, chip));
-    box.append(chip);
+    routes.set(route.route_id, { ...info, name: route.name, stops: route.stops, color: ROUTE_COLORS[index % ROUTE_COLORS.length],
+      words: norm(route.route_id + " " + route.name + " " + (route.stops || []).map((s) => s.name).join(" ")) });
+    (route.stops || []).forEach((stop) => {
+      const entry = byStop.get(stop.stop_id) || { stop, key: norm(stop.name), routes: [] };
+      if (!entry.routes.includes(route.route_id)) entry.routes.push(route.route_id);
+      byStop.set(stop.stop_id, entry);
+    });
   });
+  stopIndex = [...byStop.values()];
   [...selected].forEach((id) => routes.has(id) ? drawRoute(id) : selected.delete(id));
-  countRoutes();
-  fillStopNames();
+  renderRouteResults();
+  renderActiveRoutes();
+  renderCityStops();
+  renderFavs();
 }
 
-function countRoutes() { byId("route-count").textContent = selected.size + " de " + MAX_ROUTES; }
+function badge(id) {
+  const b = el("span", "route-badge", id);
+  b.style.setProperty("--c", (routes.get(id) || {}).color || "var(--brand)");
+  return b;
+}
 
-function toggleRoute(id, chip) {
+// UX-03: por número («12»), por nombre o por un barrio por el que pasa («tamasagra», sin tildes).
+function renderRouteResults() {
+  const q = norm(byId("route-search").value);
+  const box = byId("route-results");
+  box.hidden = !q;
+  if (!q) { box.replaceChildren(); return; }
+  const found = [...routes.entries()].filter(([id, r]) => r.words.includes(q));
+  if (!found.length) {
+    box.replaceChildren(el("li", "route-empty", "Ninguna ruta pasa por «" + byId("route-search").value.trim() + "». Prueba con el nombre de una parada o un barrio."));
+    return;
+  }
+  box.replaceChildren(...found.map(([id, r]) => {
+    const li = el("li");
+    const row = el("button", "route-row");
+    row.type = "button";
+    const on = selected.has(id);
+    row.setAttribute("aria-pressed", String(on));
+    const byName = norm(id).includes(q) || norm(r.name).includes(q);
+    const stop = byName ? null : (r.stops || []).find((s) => norm(s.name).includes(q));
+    const info = el("span", "info");
+    info.append(el("strong", "", r.name), el("span", "", routeKind(id) + (stop ? " · pasa por " + stop.name : "")));
+    row.append(badge(id), info, el("span", "act", on ? "Quitar" : (selected.size >= MAX_ROUTES ? "Máx. 5" : "Agregar")));
+    row.addEventListener("click", () => toggleRoute(id, true));
+    li.append(row);
+    return li;
+  }));
+}
+
+function renderActiveRoutes() {
+  byId("route-count").textContent = selected.size + " de " + MAX_ROUTES;
+  const list = byId("active-routes");
+  if (!selected.size) {
+    list.replaceChildren(el("li", "active-empty", "Aún no eliges rutas. Búscala arriba o usa «Cerca de mí»."));
+    return;
+  }
+  list.replaceChildren(...[...selected].map((id) => {
+    const r = routes.get(id) || { name: "" };
+    const li = el("li", "active-route");
+    const head = el("div", "head");
+    const remove = el("button", "remove", "×");
+    remove.type = "button";
+    remove.setAttribute("aria-label", "Quitar la ruta " + id);
+    remove.addEventListener("click", () => toggleRoute(id));
+    head.append(badge(id), el("strong", "", r.name), remove);
+    const sub = el("span", "sub");
+    sub.dataset.route = id;
+    li.append(head, sub);
+    return li;
+  }));
+  countActive();
+}
+
+// Solo cambia el texto: así las tarjetas no repiten su animación de entrada con cada lectura.
+function countActive() {
+  const buses = liveBuses();
+  document.querySelectorAll(".active-route .sub[data-route]").forEach((sub) => {
+    const id = sub.dataset.route;
+    const count = buses.filter((b) => b.route === id).length;
+    sub.textContent = routeKind(id) + " · " + (feeds.has(id) || Emu.running() ? count + (count === 1 ? " bus en servicio" : " buses en servicio") : "cargando buses…");
+  });
+}
+
+function toggleRoute(id, fly) {
   if (selected.has(id)) {
     selected.delete(id);
     feeds.delete(id);
     send({ action: "unsubscribe", routes: [id] });
     const layers = routes.get(id).layers;
     if (layers) layers.remove();
-    chip.setAttribute("aria-pressed", "false");
-    render();
   } else {
-    if (selected.size >= MAX_ROUTES) { toast("Máximo " + MAX_ROUTES + " rutas a la vez."); return; }
+    if (selected.size >= MAX_ROUTES) { toast("Máximo " + MAX_ROUTES + " rutas a la vez: quita una de «Mis rutas»."); return; }
     selected.add(id);
     send({ action: "subscribe", routes: [id] });
-    chip.setAttribute("aria-pressed", "true");
-    drawRoute(id);
-    render();
+    drawRoute(id, fly);
   }
-  countRoutes();
+  keep("routes", [...selected]);
+  renderRouteResults();
+  renderActiveRoutes();
+  renderCityStops();
+  render();
 }
 
 async function ensurePath(id) {
@@ -282,7 +390,8 @@ async function ensurePath(id) {
   return route.path;
 }
 
-async function drawRoute(id) {
+// UX-09: al activar una ruta, el mapa vuela a su recorrido, la línea se dibuja y las paradas aparecen escalonadas.
+async function drawRoute(id, fly) {
   const route = routes.get(id);
   try { await ensurePath(id); } catch (err) { toast(err.message); return; }
   if (!selected.has(id)) return;
@@ -297,19 +406,34 @@ async function drawRoute(id) {
     }).addTo(group);
   }
   if (latlngs.length > 1) {
-    const line = L.polyline(latlngs, { color: route.color, weight: 5, opacity: 0.9, className: "route-line", interactive: false }).addTo(group);
+    const line = L.polyline(latlngs, { color: route.color, weight: 6, opacity: 0.95, className: "route-line", interactive: false }).addTo(group);
     const path = line.getElement();
     if (path && path.getTotalLength) {
       path.style.setProperty("--len", Math.ceil(path.getTotalLength()));
       // Al terminar de dibujarse se quita el trazo discontinuo: al hacer zoom cambia la longitud.
       path.addEventListener("animationend", () => { path.classList.remove("route-line"); path.style.strokeDasharray = "none"; }, { once: true });
     }
+    if (fly && !byId("view-map").hidden) {
+      map.flyToBounds(line.getBounds(), { padding: [48, 48], maxZoom: 15, duration: reducedMotion.matches ? 0 : 0.7 });
+    }
   }
-  (route.stops || []).forEach((stop) => {
-    L.circleMarker([stop.location.lat, stop.location.lng], {
-      radius: 6, weight: 3, color: route.color, fillColor: "#0B1020", fillOpacity: 1, className: "stop-dot",
+  (route.stops || []).forEach((stop, i) => {
+    const dot = L.circleMarker([stop.location.lat, stop.location.lng], {
+      radius: 6, weight: 3, color: route.color, fillColor: "#FFFFFF", fillOpacity: 1, className: "stop-dot",
     }).bindTooltip(stop.name).on("click", () => openStop(id, stop)).addTo(group);
+    const node = dot.getElement();
+    if (node) node.style.animationDelay = Math.min(i, 40) * 15 + "ms";
   });
+}
+
+// UX-02: sin rutas elegidas, las paradas de toda la ciudad se ven tenues para orientarse; tocar una la abre.
+function renderCityStops() {
+  if (selected.size) { if (cityStops) { cityStops.remove(); cityStops = null; } return; }
+  if (cityStops || !map || !stopIndex.length) return;
+  const canvas = L.canvas({ padding: 0.3 });
+  cityStops = L.layerGroup(stopIndex.map((entry) => L.circleMarker([entry.stop.location.lat, entry.stop.location.lng], {
+    renderer: canvas, radius: 4, weight: 1.5, color: "#A0947F", fillColor: "#FFFFFF", fillOpacity: 0.9,
+  }).bindTooltip(entry.stop.name + " · " + entry.routes.join(", ")).on("click", () => openStop(entry.routes[0], entry.stop)))).addTo(map);
 }
 
 // ---------------------------------------------------------------- HU-04 buses en vivo
@@ -323,7 +447,7 @@ function liveBuses() {
 
 function pinHtml(bus) {
   return '<div class="bus-pin ' + bus.state + (panelState && panelState.id === bus.bus ? " selected" : "") +
-    '"><span class="pill">' + bus.bus + " · " + bus.pct + ' %</span><span class="stem"></span></div>';
+    '"><span class="pill">' + icon(bus.state) + bus.bus + " · " + bus.pct + ' %</span><span class="stem"></span></div>';
 }
 
 function glide(marker, to) {
@@ -373,6 +497,8 @@ function render() {
   else empty.replaceWith(emptyState());
 
   if (panelState && panelState.kind === "bus") fillBusStats();
+  if (!byId("view-ops").hidden) renderKpis();
+  countActive();
 }
 
 function busCard(id) {
@@ -399,29 +525,91 @@ function fillCard(li, bus, label) {
   requestAnimationFrame(() => { fill.style.width = Math.min(100, bus.pct) + "%"; });
   b.querySelector(".free").textContent = bus.free_seats + " sillas libres · " + bus.free_standing + " de pie" + (bus.approx ? " · conteo aproximado" : "");
   b.setAttribute("aria-current", String(!!panelState && panelState.id === bus.bus));
+  b.setAttribute("aria-label", "Bus " + bus.bus + ", ruta " + bus.route + ", " + label + ", " + bus.pct + " %, " + bus.free_seats + " sillas libres");
 }
 
 function emptyState() {
+  // UX-09: mientras llega el primer dato de una ruta recién elegida, siluetas en lugar de una lista vacía.
+  const waiting = [...selected].some((id) => !feeds.has(id)) && !Emu.running();
+  if (selected.size && waiting) {
+    const li = el("li", "empty-wrap");
+    li.classList.add("empty");
+    li.style.cssText = "border:0;padding:0;gap:10px;align-items:stretch";
+    for (let i = 0; i < 2; i++) {
+      const sk = el("div", "skeleton");
+      sk.setAttribute("aria-hidden", "true");
+      sk.append(el("span"), el("span"), el("span"));
+      li.append(sk);
+    }
+    li.append(el("span", "muted small", "Cargando buses…"));
+    return li;
+  }
   const li = el("li", "empty");
   li.innerHTML = '<svg viewBox="0 0 110 76" aria-hidden="true"><path d="M8 60 C 30 58, 40 30, 60 28 S 90 20, 104 10" stroke="var(--line-2)" stroke-width="5"/>' +
-    '<circle cx="60" cy="28" r="7" fill="var(--surface)" stroke="var(--accent)" stroke-width="3"/></svg>';
+    '<circle cx="60" cy="28" r="7" fill="var(--surface)" stroke="var(--brand)" stroke-width="3"/></svg>';
   const none = !selected.size;
-  li.append(el("strong", "", none ? "Elige una ruta para empezar" : "Ningún bus reportando"),
-    el("span", "", none ? "Toca una ruta de arriba: verás su recorrido y sus buses." : "Prueba otra ruta o espera unos segundos."));
+  li.append(el("strong", "", none ? "Elige una ruta para empezar" : "Ningún bus reportando ahora"),
+    el("span", "", none ? "Busca tu ruta arriba o toca «Cerca de mí»." : "Las rutas elegidas no tienen buses en servicio en este momento."));
   return li;
 }
 
 // ---------------------------------------------------------------- planear un viaje de A a B (rutas directas)
 
-function fillStopNames() {
-  const names = new Set();
-  routes.forEach((r) => (r.stops || []).forEach((s) => names.add(s.name)));
-  byId("stop-names").replaceChildren(...[...names].sort((a, b) => a.localeCompare(b, "es")).map((n) => {
-    const o = document.createElement("option");
-    o.value = n;
-    return o;
-  }));
+// Sugerencias tolerantes a tildes y mayúsculas, con las rutas de cada parada; «Mi ubicación» como origen.
+let myPlace = null;            // { lat, lng } si el pasajero compartió su ubicación (solo en este navegador)
+
+function suggest(input, list) {
+  const q = norm(input.value);
+  const items = [];
+  if (input.name === "from" && (!q || "mi ubicacion".startsWith(q))) items.push({ me: true });
+  const seen = new Set();
+  if (q) for (const entry of stopIndex) {
+    if (entry.key.includes(q) && !seen.has(entry.key)) { seen.add(entry.key); items.push(entry); }
+    if (items.length >= 7) break;
+  }
+  if (!items.length && !q) { list.hidden = true; return; }
+  list.replaceChildren(...(items.length ? items.map((item) => {
+    const li = el("li");
+    const b = el("button", item.me ? "me" : "");
+    b.type = "button";
+    b.setAttribute("role", "option");
+    const txt = el("span", "txt");
+    if (item.me) txt.append(el("strong", "", "Mi ubicación"), el("span", "", "Desde la parada más cercana a ti"));
+    else txt.append(el("strong", "", item.stop.name), el("span", "", "Rutas " + item.routes.join(" · ")));
+    b.append(el("span", "dot"), txt);
+    b.addEventListener("mousedown", (e) => e.preventDefault());  // que el campo no pierda el foco antes del clic
+    b.addEventListener("click", async () => {
+      list.hidden = true;
+      if (item.me) {
+        const near = await nearestStops(1);
+        if (!near.length) return;
+        input.value = near[0].entry.stop.name;
+        toast("Desde " + near[0].entry.stop.name + ", a " + walk(near[0].m) + " de ti.");
+      } else input.value = item.stop.name;
+      const next = input.name === "from" ? byId("trip-to") : null;
+      if (next && !next.value) next.focus();
+    });
+    li.append(b);
+    return li;
+  }) : [el("li", "empty-sugg", "Ninguna parada se llama así. Prueba con un barrio cercano.")]));
+  list.hidden = false;
 }
+
+["from", "to"].forEach((name) => {
+  const input = byId("trip-" + name), list = byId("sugg-" + name);
+  input.addEventListener("input", () => suggest(input, list));
+  input.addEventListener("focus", () => suggest(input, list));
+  input.addEventListener("blur", () => setTimeout(() => { list.hidden = true; }, 120));
+  input.addEventListener("keydown", (e) => { if (e.key === "Escape") list.hidden = true; });
+});
+
+function openPlanner(open) {
+  const trip = byId("trip");
+  trip.hidden = !open;
+  byId("plan-btn").setAttribute("aria-expanded", String(open));
+  if (open) { byId("sheet").classList.remove("collapsed"); byId("trip-from").focus(); }
+}
+byId("plan-btn").addEventListener("click", () => openPlanner(byId("trip").hidden));
 
 // Rutas que pasan por las dos paradas. El orden de las paradas es el de ida: si «desde» va antes, se viaja de ida;
 // si va después, de regreso (el regreso recorre las paradas al revés).
@@ -429,8 +617,8 @@ function directTrips(fromName, toName) {
   const trips = [];
   routes.forEach((route, routeId) => {
     const stops = route.stops || [];
-    const from = stops.find((s) => s.name === fromName);
-    const to = stops.find((s) => s.name === toName);
+    const from = stops.find((s) => norm(s.name) === norm(fromName));
+    const to = stops.find((s) => norm(s.name) === norm(toName));
     if (!from || !to || from.stop_id === to.stop_id) return;
     const dir = from.order < to.order ? "outbound" : "return";
     trips.push({ routeId, from, to, dir, stops: Math.abs(to.order - from.order) });
@@ -441,7 +629,7 @@ function directTrips(fromName, toName) {
 async function planTrip(fromName, toName) {
   const out = byId("trip-results");
   if (!fromName || !toName) { out.replaceChildren(el("li", "notice", "Escribe la parada de salida y la de llegada.")); return; }
-  if (fromName === toName) { out.replaceChildren(el("li", "notice", "La salida y la llegada son la misma parada.")); return; }
+  if (norm(fromName) === norm(toName)) { out.replaceChildren(el("li", "notice", "La salida y la llegada son la misma parada.")); return; }
   const trips = directTrips(fromName, toName);
   if (!trips.length) {
     out.replaceChildren(el("li", "notice", "Ninguna ruta pasa por las dos paradas. Prueba con una parada cercana."));
@@ -476,8 +664,7 @@ async function planTrip(fromName, toName) {
     }
     card.append(el("span", "free", "Sube en " + trip.from.name + " · baja en " + trip.to.name));
     card.addEventListener("click", () => {
-      const chip = document.querySelector('.chip[data-route="' + trip.routeId + '"]');
-      if (!selected.has(trip.routeId) && chip) toggleRoute(trip.routeId, chip);
+      if (!selected.has(trip.routeId)) toggleRoute(trip.routeId, true);
       openStop(trip.routeId, trip.from, trip.dir);
     });
     li.append(card);
@@ -493,6 +680,143 @@ byId("trip-swap").addEventListener("click", () => {
   const f = byId("trip-form");
   [f.from.value, f.to.value] = [f.to.value, f.from.value];
 });
+
+// ---------------------------------------------------------------- UX-04 paradas cerca de mí
+
+let meMarker = null, nearLayer = null;
+const walk = (m) => (m < 1000 ? Math.round(m / 10) * 10 + " m" : (m / 1000).toFixed(1) + " km") + " · " + Math.max(1, Math.round(m / 80)) + " min a pie";
+
+function locate() {
+  return new Promise((resolve, reject) => {
+    if (myPlace) return resolve(myPlace);
+    if (!navigator.geolocation) return reject(new Error("Este navegador no puede dar tu ubicación."));
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { myPlace = { lat: pos.coords.latitude, lng: pos.coords.longitude }; resolve(myPlace); },
+      () => reject(new Error("No tenemos tu ubicación. Actívala en el candado junto a la dirección de la página, o busca tu parada por nombre.")),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
+  });
+}
+
+async function nearestStops(n) {
+  let here;
+  try { here = await locate(); } catch (err) { toast(err.message); return []; }
+  const at = L.latLng(here.lat, here.lng);
+  return stopIndex.map((entry) => ({ entry, m: at.distanceTo([entry.stop.location.lat, entry.stop.location.lng]) }))
+    .sort((a, b) => a.m - b.m).slice(0, n);
+}
+
+async function showNear() {
+  const box = byId("near"), list = byId("near-list");
+  box.hidden = false;
+  list.replaceChildren(el("li", "spinner"));
+  const near = await nearestStops(3);
+  if (!near.length) { box.hidden = true; return; }
+  if (meMarker) meMarker.remove();
+  if (nearLayer) nearLayer.remove();
+  nearLayer = L.layerGroup(near.map(({ entry }, i) => L.marker([entry.stop.location.lat, entry.stop.location.lng], {
+    icon: L.divIcon({ className: "", html: '<div class="near-pin" style="animation-delay:' + i * 90 + 'ms">' + (i + 1) + "</div>", iconSize: [30, 30] }),
+    title: entry.stop.name,
+  }).on("click", () => openStop(entry.routes[0], entry.stop)))).addTo(map);
+  meMarker = L.marker([myPlace.lat, myPlace.lng], { icon: L.divIcon({ className: "", html: '<div class="me-dot"></div>', iconSize: [18, 18] }), keyboard: false, title: "Tu ubicación" }).addTo(map);
+  const bounds = L.latLngBounds([[myPlace.lat, myPlace.lng], ...near.map((x) => [x.entry.stop.location.lat, x.entry.stop.location.lng])]);
+  map.flyToBounds(bounds, { padding: [60, 60], maxZoom: 17, duration: reducedMotion.matches ? 0 : 0.8 });
+  list.replaceChildren(...near.map(({ entry, m }, i) => {
+    const li = el("li");
+    const row = el("button", "stop-row");
+    row.type = "button";
+    row.style.animationDelay = i * 90 + "ms";
+    const info = el("span", "info");
+    info.append(el("strong", "", entry.stop.name), el("span", "", walk(m) + " · rutas " + entry.routes.join(" · ")));
+    row.append(el("span", "n", String(i + 1)), info);
+    row.addEventListener("click", () => openStop(entry.routes[0], entry.stop));
+    li.append(row);
+    return li;
+  }));
+}
+byId("near-btn").addEventListener("click", showNear);
+byId("near-close").addEventListener("click", () => {
+  byId("near").hidden = true;
+  if (meMarker) { meMarker.remove(); meMarker = null; }
+  if (nearLayer) { nearLayer.remove(); nearLayer = null; }
+});
+
+// ---------------------------------------------------------------- UX-08 paradas favoritas
+
+const favs = () => kept("favs") || [];   // [{ route, stop_id, name, lat, lng }]
+const isFav = (stopId) => favs().some((f) => f.stop_id === stopId);
+
+function setFav(route, stop, on) {
+  const rest = favs().filter((f) => f.stop_id !== stop.stop_id);
+  keep("favs", on ? [...rest, { route, stop_id: stop.stop_id, name: stop.name, lat: stop.location.lat, lng: stop.location.lng }] : rest);
+  renderFavs();
+}
+
+async function renderFavs() {
+  const list = favs();
+  byId("favs").hidden = !list.length;
+  const box = byId("fav-list");
+  box.replaceChildren(...list.map((f) => {
+    const li = el("li");
+    const row = el("button", "stop-row");
+    row.type = "button";
+    row.innerHTML = '<svg class="star" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg>';
+    const info = el("span", "info");
+    const next = el("span", "next", "Buscando el próximo bus…");
+    info.append(el("strong", "", f.name), el("span", "", "Ruta " + f.route), next);
+    row.append(info);
+    row.addEventListener("click", () => openStop(f.route, { stop_id: f.stop_id, name: f.name, location: { lat: f.lat, lng: f.lng } }));
+    li.append(row);
+    api("/stops/" + encodeURIComponent(f.stop_id) + "/next-buses?route_id=" + encodeURIComponent(f.route) + "&limit=1")
+      .then((d) => {
+        const b = d.buses[0];
+        next.textContent = b ? "Bus " + b.bus.bus_id + " · " + etaText(b.eta_min).toLowerCase() + " · " + (b.bus.occupancy.label || STATE_LABEL[b.bus.occupancy.state]) : "Ningún bus en camino ahora";
+      })
+      .catch(() => { next.textContent = "Sin datos del próximo bus"; });
+    return li;
+  }));
+}
+
+// ---------------------------------------------------------------- UX-06 recorrido guiado
+
+const TOUR = [
+  { target: "route-search", title: "Encuentra tu ruta", body: "Escribe el número de la ruta o un barrio por el que pasa: «12» o «Tamasagra». Puedes seguir hasta 5 rutas a la vez." },
+  { target: "buses", title: "Mira cuánto espacio hay", body: "Cada bus muestra su ocupación con un color, un icono y un número: verde hay sillas, amarillo solo de pie, rojo lleno." },
+  { target: "near-btn", title: "Planea tu viaje", body: "Toca «Cerca de mí» para ver tus paradas más próximas, o «Planear viaje» para ir de una parada a otra." },
+];
+let tourStep = -1;
+
+function tour(step) {
+  document.querySelectorAll(".tour-target").forEach((n) => n.classList.remove("tour-target"));
+  const box = byId("tour");
+  if (step < 0 || step >= TOUR.length) { box.hidden = true; tourStep = -1; keep("tour_done", true); return; }
+  tourStep = step;
+  const s = TOUR[step];
+  byId("tour-step").textContent = "Paso " + (step + 1) + " de " + TOUR.length;
+  byId("tour-title").textContent = s.title;
+  byId("tour-body").textContent = s.body;
+  byId("tour-dots").replaceChildren(...TOUR.map((_, i) => el("span", i === step ? "on" : "")));
+  byId("tour-back").hidden = step === 0;
+  byId("tour-next").textContent = step === TOUR.length - 1 ? "Empezar" : "Siguiente";
+  box.hidden = false;
+  const target = byId(s.target);
+  const card = box.querySelector(".tour-card");
+  box.classList.toggle("no-target", !target || !target.offsetParent);
+  if (target && target.offsetParent) {
+    target.classList.add("tour-target");
+    target.scrollIntoView({ block: "nearest", behavior: reducedMotion.matches ? "auto" : "smooth" });
+    const r = target.getBoundingClientRect();
+    const phone = window.innerWidth <= 720;
+    card.style.left = phone ? "16px" : Math.min(window.innerWidth - 400, r.right + 20) + "px";
+    card.style.top = phone ? "auto" : Math.max(80, Math.min(window.innerHeight - 280, r.top)) + "px";
+    card.style.bottom = phone ? "16px" : "auto";
+  }
+  byId("tour-next").focus();
+}
+byId("tour-next").addEventListener("click", () => tour(tourStep + 1));
+byId("tour-back").addEventListener("click", () => tour(tourStep - 1));
+byId("tour-skip").addEventListener("click", () => tour(-1));
+byId("help-btn").addEventListener("click", () => { showView("map"); tour(0); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && tourStep >= 0) tour(-1); });
 
 // ---------------------------------------------------------------- panel lateral
 
@@ -659,7 +983,30 @@ function openStop(routeId, stop, startDir = "outbound") {
     });
     seg.append(b);
   });
-  body.append(seg, list);
+  const tools = el("div", "stop-tools");
+  const fav = el("button", "btn fav-btn");
+  fav.type = "button";
+  fav.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg>';
+  const paintFav = () => {
+    const on = isFav(stop.stop_id);
+    fav.setAttribute("aria-pressed", String(on));
+    fav.setAttribute("aria-label", on ? "Quitar de mis paradas" : "Guardar en mis paradas");
+  };
+  paintFav();
+  fav.addEventListener("click", () => {
+    const on = !isFav(stop.stop_id);
+    setFav(routeId, stop, on);
+    paintFav();
+    toast(on ? "Guardada en Mis paradas" : "Quitada de Mis paradas",
+      { label: "Deshacer", run: () => { setFav(routeId, stop, !on); paintFav(); } });
+  });
+  const goFrom = el("button", "btn", "Ir desde aquí");
+  const goTo = el("button", "btn primary", "Ir hasta aquí");
+  [goFrom, goTo].forEach((b) => { b.type = "button"; });
+  goFrom.addEventListener("click", () => { byId("trip-from").value = stop.name; closePanel(); openPlanner(true); byId("trip-to").focus(); });
+  goTo.addEventListener("click", () => { byId("trip-to").value = stop.name; closePanel(); openPlanner(true); });
+  tools.append(fav, goFrom, goTo);
+  body.append(tools, seg, list);
   loadNext(routeId, stop.stop_id, startDir, list);
   panelState.timer = setInterval(() => {
     const dir = seg.querySelector('[aria-pressed="true"]').textContent === "Ida" ? "outbound" : "return";
@@ -718,14 +1065,57 @@ function showView(name) {
   else renderEmu();
 }
 
+// La flota completa (no solo las rutas elegidas): /buses/active admite 5 rutas por consulta.
+let fleet = [], fleetAt = 0, kpiFilter = null;
+const FILTERS = { silent: /silent|no_data|stale/i, over: /crowd|overcap|sobrecupo/i };
+
+async function loadFleet() {
+  const ids = [...routes.keys()];
+  const groups = [];
+  for (let i = 0; i < ids.length; i += 5) groups.push(ids.slice(i, i + 5));
+  const answers = await Promise.all(groups.map((g) => api("/buses/active?" + g.map((id) => "route_id=" + encodeURIComponent(id)).join("&")).catch(() => ({ routes: [] }))));
+  fleet = answers.flatMap((a) => a.routes.flatMap((r) => r.buses));
+  fleetAt = Date.now();
+  renderKpis();
+}
+
+function renderKpis() {
+  const box = byId("ops-kpis");
+  if (!box) return;
+  const now = Date.now() / 1000;
+  const live = fleet.filter((b) => now - b.updated_at <= 60);
+  const silent = fleet.length - live.length;
+  const avg = live.length ? Math.round(live.reduce((n, b) => n + b.occupancy.percentage, 0) / live.length) : 0;
+  const over = live.filter((b) => b.occupancy.state === "overcrowded" || b.occupancy.state === "full").length;
+  const items = [
+    { id: null, label: "Buses en servicio", value: live.length, hint: fleet.length ? "de " + fleet.length + " con datos" : "esperando datos" },
+    { id: null, label: "Ocupación promedio", value: avg + " %", hint: "de los buses en servicio" },
+    { id: "over", label: "Llenos o con sobrecupo", value: over, hint: "toca para ver sus hallazgos" },
+    { id: "silent", label: "Sin reportar", value: silent, hint: "más de 60 s sin datos" },
+  ];
+  box.replaceChildren(...items.map((k, i) => {
+    const b = el(k.id ? "button" : "div", "kpi");
+    if (k.id) {
+      b.type = "button";
+      b.setAttribute("aria-pressed", String(kpiFilter === k.id));
+      b.addEventListener("click", () => { kpiFilter = kpiFilter === k.id ? null : k.id; renderKpis(); loadFindings(); });
+    }
+    b.style.animationDelay = i * 60 + "ms";
+    b.append(el("span", "k-label", k.label), el("b", "", String(k.value)), el("span", "k-hint", k.hint));
+    return b;
+  }));
+}
+
 async function loadFindings() {
+  if (Date.now() - fleetAt > 15000) loadFleet();
   const source = document.querySelector('.seg-btn[data-source][aria-pressed="true"]').dataset.source;
   const list = byId("findings");
   list.replaceChildren(el("li", "spinner"));
   try {
     const data = await api("/findings?limit=50" + (source ? "&source=" + source : ""));
-    if (!data.findings.length) { list.replaceChildren(el("li", "empty", "Sin hallazgos por ahora.")); return; }
-    list.replaceChildren(...data.findings.map((f, i) => {
+    const shown = kpiFilter ? data.findings.filter((f) => FILTERS[kpiFilter].test(f.kind)) : data.findings;
+    if (!shown.length) { list.replaceChildren(el("li", "empty", kpiFilter ? "Ningún hallazgo de este tipo." : "Sin hallazgos por ahora.")); return; }
+    list.replaceChildren(...shown.map((f, i) => {
       const li = el("li", "finding");
       li.style.animationDelay = Math.min(i, 10) * 30 + "ms";
       const what = el("div", "what");
@@ -913,6 +1303,7 @@ async function start() {
   try { await showRoutes(); } catch (err) { toast(err.message); }
   render();
   connect();
+  if (!kept("tour_done")) setTimeout(() => tour(0), 600);  // UX-06: solo la primera vez en este navegador
 }
 
 function logout(notice) {
@@ -937,6 +1328,8 @@ function logout(notice) {
   cards.forEach((li) => li.remove());
   cards.clear();
   routes.forEach((r) => { if (r.layers) { r.layers.remove(); r.layers = null; } });
+  if (cityStops) { cityStops.remove(); cityStops = null; }
+  tour(-1);
   setStatus("off", "Desconectado");
   byId("shell").hidden = true;
   byId("auth").hidden = false;
@@ -946,6 +1339,8 @@ function logout(notice) {
 }
 
 byId("logout").addEventListener("click", () => logout());
+byId("route-search").addEventListener("input", renderRouteResults);
+byId("route-search").addEventListener("keydown", (e) => { if (e.key === "Escape") { e.target.value = ""; renderRouteResults(); } });
 
 // Si queda una sesión abierta en esta pestaña, se reanuda sin pedir la contraseña.
 (async () => {

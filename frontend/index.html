@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0B1020">
+  <meta name="theme-color" content="#F8F5F0">
   <title>MoveIU · Ocupación de buses en vivo</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800&family=Inter:wght@400;500;600;700&display=swap">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-  <link rel="stylesheet" href="styles.css?v=10">
+  <link rel="stylesheet" href="styles.css?v=11">
 </head>
 <body>
   <a class="skip" href="#main">Saltar al contenido</a>
@@ -101,6 +101,7 @@
       <div class="topbar-end">
         <span id="status" class="status" data-state="off" role="status" aria-live="polite"><span class="dot" aria-hidden="true"></span><span class="status-text">Desconectado</span></span>
         <button type="button" id="sim-btn" class="btn sim-btn" aria-pressed="false"><span class="long">Iniciar simulación</span><span class="short" aria-hidden="true">Simular</span></button>
+        <button type="button" id="help-btn" class="icon-btn help-btn" aria-label="Ayuda: ver el recorrido guiado">?</button>
         <span id="avatar" class="avatar" aria-hidden="true"></span>
         <button type="button" id="logout" class="btn ghost">Salir</button>
       </div>
@@ -113,32 +114,61 @@
       <span class="muted">· los buses emulados no son datos reales</span>
       <button type="button" id="sim-exit" class="btn ghost">Salir</button>
     </div>
+    <div id="conn-band" class="conn-band" role="status" hidden></div>
     <main id="main" class="content">
       <!-- HU-03 / HU-04: rutas, buses y mapa -->
       <section id="view-map" class="view-map">
         <aside id="sheet" class="sheet" aria-label="Rutas y buses">
           <button type="button" id="sheet-handle" class="sheet-handle" aria-expanded="true" aria-controls="sheet-body"><span class="sr-only">Mostrar u ocultar la lista</span></button>
           <div id="sheet-body" class="sheet-body">
-            <section class="trip" aria-labelledby="trip-title">
+            <!-- UX-03: buscar una ruta por número, nombre o barrio -->
+            <div class="route-search">
+              <label for="route-search" class="section-label">Busca tu ruta</label>
+              <div class="search-box"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg><input id="route-search" type="search" autocomplete="off" placeholder="Número o barrio: 12, Tamasagra…" aria-controls="route-results"></div>
+              <ul id="route-results" class="route-results" aria-label="Rutas encontradas" hidden></ul>
+            </div>
+            <div class="quick">
+              <button type="button" id="near-btn" class="btn quick-btn near-btn"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path></svg>Cerca de mí</button>
+              <button type="button" id="plan-btn" class="btn quick-btn" aria-expanded="false" aria-controls="trip"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="6" cy="18" r="2.5"></circle><circle cx="18" cy="6" r="2.5"></circle><path d="M8.5 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.5"></path></svg>Planear viaje</button>
+            </div>
+
+            <!-- UX-04: paradas cerca de mí -->
+            <section id="near" class="near" aria-labelledby="near-title" hidden>
+              <div class="section-head"><h2 id="near-title">Cerca de ti</h2><button type="button" id="near-close" class="icon-btn small" aria-label="Cerrar paradas cercanas">×</button></div>
+              <ol id="near-list" class="near-list" aria-live="polite"></ol>
+            </section>
+
+            <!-- UX-05: planear un viaje con sugerencias -->
+            <section id="trip" class="trip" aria-labelledby="trip-title" hidden>
               <h2 id="trip-title">¿A dónde vas?</h2>
-              <form id="trip-form" class="trip-form">
-                <label>Desde
-                  <input name="from" list="stop-names" autocomplete="off" placeholder="Parada de salida" required>
-                </label>
-                <button type="button" id="trip-swap" class="icon-btn trip-swap" aria-label="Intercambiar salida y llegada">⇅</button>
-                <label>Hasta
-                  <input name="to" list="stop-names" autocomplete="off" placeholder="Parada de llegada" required>
-                </label>
-                <button type="submit" class="btn primary">Buscar</button>
+              <form id="trip-form" class="trip-form" autocomplete="off">
+                <div class="field">
+                  <label for="trip-from">Desde</label>
+                  <input id="trip-from" name="from" placeholder="Parada, barrio o tu ubicación" required aria-autocomplete="list" aria-controls="sugg-from">
+                  <ul id="sugg-from" class="sugg" role="listbox" aria-label="Sugerencias de salida" hidden></ul>
+                </div>
+                <button type="button" id="trip-swap" class="icon-btn trip-swap" aria-label="Intercambiar salida y llegada"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7 4v16M3 8l4-4 4 4M17 20V4M13 16l4 4 4-4"></path></svg></button>
+                <div class="field">
+                  <label for="trip-to">Hasta</label>
+                  <input id="trip-to" name="to" placeholder="Parada o barrio de llegada" required aria-autocomplete="list" aria-controls="sugg-to">
+                  <ul id="sugg-to" class="sugg" role="listbox" aria-label="Sugerencias de llegada" hidden></ul>
+                </div>
+                <button type="submit" class="btn primary">Buscar viaje</button>
               </form>
-              <datalist id="stop-names"></datalist>
               <ol id="trip-results" class="trip-results" aria-live="polite"></ol>
             </section>
+
+            <!-- UX-08: paradas favoritas -->
+            <section id="favs" class="favs" aria-labelledby="favs-title" hidden>
+              <div class="section-head"><h2 id="favs-title">Mis paradas</h2></div>
+              <ol id="fav-list" class="fav-list" aria-live="polite"></ol>
+            </section>
+
             <div class="section-head">
-              <h2>Tus rutas</h2>
+              <h2>Mis rutas</h2>
               <span id="route-count" class="muted">0 de 5</span>
             </div>
-            <div id="routes" class="chips" role="group" aria-label="Rutas, máximo 5"></div>
+            <ol id="active-routes" class="active-routes" aria-live="polite"></ol>
             <div class="section-head">
               <h2>Buses · más espacio primero</h2>
               <span id="bus-count" class="muted">0</span>
@@ -162,6 +192,8 @@
 
       <!-- HU-08: operación -->
       <section id="view-ops" class="view-ops" hidden>
+        <!-- UX-11: la flota de un vistazo -->
+        <div id="ops-kpis" class="ops-kpis" aria-live="polite"></div>
         <section class="card findings" aria-labelledby="findings-title">
           <div class="section-head">
             <h2 id="findings-title">Hallazgos recientes</h2>
@@ -223,13 +255,27 @@
       <div id="panel-body" class="panel-body"></div>
     </aside>
 
+    <!-- UX-06: recorrido guiado de tres pasos -->
+    <div id="tour" class="tour" hidden>
+      <div class="tour-card" role="dialog" aria-labelledby="tour-title" aria-describedby="tour-body">
+        <div class="tour-top"><span id="tour-step" class="kicker"></span><button type="button" id="tour-skip" class="btn ghost">Saltar</button></div>
+        <h2 id="tour-title"></h2>
+        <p id="tour-body"></p>
+        <div id="tour-dots" class="tour-dots" aria-hidden="true"></div>
+        <div class="tour-actions">
+          <button type="button" id="tour-back" class="btn">Atrás</button>
+          <button type="button" id="tour-next" class="btn primary">Siguiente</button>
+        </div>
+      </div>
+    </div>
+
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
   <script src="config.js"></script>
-  <script src="cabin.js?v=10"></script>
-  <script src="emulation.js?v=10"></script>
-  <script src="app.js?v=10"></script>
+  <script src="cabin.js?v=11"></script>
+  <script src="emulation.js?v=11"></script>
+  <script src="app.js?v=11"></script>
 </body>
 </html>
