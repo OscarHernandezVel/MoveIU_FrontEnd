@@ -568,3 +568,18 @@ iframe.twin { width: 100%; height: 380px; border: 1px solid var(--line); border-
 .cabin-activity .stop { padding: 3px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-text); font-weight: 700; font-size: 12px; }
 .c3-person.walking { transition: transform 1.6s linear; }
 @media (prefers-reduced-motion: reduce) { .c3-person.walking { transition: none; } }
+
+/* buses con el ícono del logo de MoveIU */
+.bus-pin .pill .bus-glyph { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.bus-pin .pill .bus-glyph .w { fill: currentColor; stroke: none; }
+
+/* elegir destino tocando el mapa */
+.pick-btn { height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; border-style: dashed; color: var(--accent-text); }
+.pick-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linejoin: round; }
+.pick-btn[aria-pressed="true"] { background: var(--accent-soft); border-style: solid; border-color: var(--accent); }
+.pick-band { flex: none; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 6px 16px; font-weight: 700; font-size: 14px; position: relative; z-index: 14;
+             background: var(--accent-soft); color: var(--accent-text); animation: banner-in .28s var(--ease) both; }
+.pick-band .btn { height: 32px; }
+body.picking #map, body.picking #map .leaflet-interactive { cursor: crosshair !important; }
+.dest-pin { width: 30px; height: 38px; animation: drop .4s var(--ease) both;
+            background: no-repeat center / contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 38'%3E%3Cpath d='M15 37S2 23.5 2 14a13 13 0 0 1 26 0c0 9.5-13 23-13 23z' fill='%23E05018' stroke='%23fff' stroke-width='3'/%3E%3Ccircle cx='15' cy='14' r='5' fill='%23fff'/%3E%3C/svg%3E"); }

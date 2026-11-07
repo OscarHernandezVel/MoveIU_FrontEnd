@@ -4,12 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#F8F5F0">
-  <title>MoveIU · Ocupación de buses en vivo</title>
+  <title>MoveIU</title>
+  <link rel="icon" href="favicon.svg?v=1" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800&family=Inter:wght@400;500;600;700&display=swap">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-  <link rel="stylesheet" href="styles.css?v=16">
+  <link rel="stylesheet" href="styles.css?v=17">
 </head>
 <body>
   <a class="skip" href="#main">Saltar al contenido</a>
@@ -115,6 +116,7 @@
       <button type="button" id="sim-exit" class="btn ghost">Salir</button>
     </div>
     <div id="conn-band" class="conn-band" role="status" hidden></div>
+    <div id="pick-band" class="pick-band" role="status" hidden>Toca el mapa donde quieres llegar · <button type="button" id="pick-cancel" class="btn ghost">Cancelar</button></div>
     <main id="main" class="content">
       <!-- HU-03 / HU-04: rutas, buses y mapa -->
       <section id="view-map" class="view-map">
@@ -134,7 +136,7 @@
 
             <!-- UX-04: paradas cerca de mí -->
             <section id="near" class="near" aria-labelledby="near-title" hidden>
-              <div class="section-head"><h2 id="near-title">Cerca de ti</h2><button type="button" id="near-close" class="icon-btn small" aria-label="Cerrar paradas cercanas">×</button></div>
+              <div class="section-head"><h2 id="near-title">Paradas cerca de ti</h2><button type="button" id="near-close" class="icon-btn small" aria-label="Cerrar paradas cercanas">×</button></div>
               <ol id="near-list" class="near-list" aria-live="polite"></ol>
             </section>
 
@@ -153,6 +155,7 @@
                   <input id="trip-to" name="to" placeholder="Parada o barrio de llegada" required aria-autocomplete="list" aria-controls="sugg-to">
                   <ul id="sugg-to" class="sugg" role="listbox" aria-label="Sugerencias de llegada" hidden></ul>
                 </div>
+                <button type="button" id="pick-dest" class="btn pick-btn" aria-pressed="false"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>Elegir destino manualmente</button>
                 <button type="submit" class="btn primary">Buscar viaje</button>
               </form>
               <ol id="trip-results" class="trip-results" aria-live="polite"></ol>
@@ -274,9 +277,9 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
   <script src="config.js"></script>
-  <script src="cabin.js?v=16"></script>
-  <script src="cabin3d.js?v=16"></script>
-  <script src="emulation.js?v=16"></script>
-  <script src="app.js?v=16"></script>
+  <script src="cabin.js?v=17"></script>
+  <script src="cabin3d.js?v=17"></script>
+  <script src="emulation.js?v=17"></script>
+  <script src="app.js?v=17"></script>
 </body>
 </html>
