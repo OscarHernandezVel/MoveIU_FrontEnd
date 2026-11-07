@@ -15,7 +15,7 @@ window.Cabin = (() => {
     let i = 0;  // orden de relleno: las sillas ocupadas aparecen una tras otra (20 ms)
     const seat = (id, cls) => {
       const node = el("span", cls);
-      node.title = id;
+      node.dataset.pos = id;  // solo para actualizarla; no se muestra (sin identificadores a la vista)
       if (taken.has(id)) { node.classList.add("on"); node.style.setProperty("--i", i++); }
       return node;
     };
@@ -33,7 +33,6 @@ window.Cabin = (() => {
       row.append(el("span", "n", r), seat("S" + r + "-L1", "seat"), seat("S" + r + "-L2", "seat"));
       if (n === 1 || n === 10) row.append(el("span", "door", "puerta"));
       else row.append(seat("P" + r, "stand"), seat("S" + r + "-R2", "seat"), seat("S" + r + "-R1", "seat"));
-      if (n !== 1 && n !== 10) row.children[3].textContent = "P" + r;
       box.append(row);
     }
     const bench = el("div", "bench");
@@ -52,7 +51,7 @@ window.Cabin = (() => {
     const taken = new Set(occupied || []);
     let i = 0;
     box.querySelectorAll(".seat, .stand").forEach((node) => {
-      const on = taken.has(node.title);
+      const on = taken.has(node.dataset.pos);
       if (on && !node.classList.contains("on")) node.style.setProperty("--i", i++);
       node.classList.toggle("on", on);
     });
