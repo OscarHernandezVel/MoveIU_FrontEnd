@@ -15,17 +15,25 @@ No necesita compilación: HTML + CSS + JavaScript y **Leaflet 1.9** (desde cdnjs
 
 ## Qué hace
 
+Interfaz con la identidad del SETP Pasto (Avante): naranja `#E05018`, verde `#00A858` y fondo crema, tomados de la
+guía oficial de rutas; tema oscuro según el sistema. Historias UX-01 a UX-11 (mockups interactivos en el lienzo
+«MoveIU · Rediseño SETP»).
+
 * **Acceso:** crear cuenta o entrar; si el correo ya existe, ofrece entrar con él. Al vencer la sesión avisa y vuelve al acceso.
-* **Mapa en vivo:** hasta 5 rutas; cada una dibuja su recorrido y sus paradas. Los buses se deslizan entre lecturas (cada 3 s) y la lista se ordena por más espacio primero.
-* **Bus:** ocupación, sillas libres, sitios de pie y el botón «Mostrar ocupación real del bus #…», que muestra el plano de la cabina y avisa si el plano no está al día.
-* **Parada:** «este bus o el siguiente» en ida o regreso, con el recomendado resaltado y el tiempo estimado de llegada.
-* **¿A dónde vas?:** se eligen la parada de salida y la de llegada; muestra las rutas directas que pasan por las dos, con el próximo bus, cuándo llega y cuánto espacio trae (los transbordos aún no).
-* **Estado:** En vivo / Conectando / Reconectando (los buses se atenúan mientras no hay datos frescos).
-* **Cabina 3D:** en el panel del bus, el plano o el gemelo 3D visto desde la cámara frontal, la trasera o libre.
-* **Simulación:** el botón «Iniciar simulación» de la barra superior (o el de la vista Emulación) la enciende; un aviso ámbar indica que está activa y «Salir» vuelve a los datos reales.
-* **Emulación:** buses ficticios en todas las rutas, con escenario (valle, normal, pico), indicadores de la flota y la opción de verlos en el mapa. No envía nada al backend.
-* **Operación** (solo administrador y auditor): hallazgos por reglas o IA y análisis de la flota.
-* **Accesibilidad:** el color nunca es la única señal, foco visible, navegación con teclado y `prefers-reduced-motion`.
+* **Buscar ruta (UX-03):** por número («12»), nombre o barrio por el que pasa («tamasagra», sin tildes), con origen, destino y tipo.
+* **Mis rutas (UX-02):** hasta 5; se recuerdan en este navegador. Sin rutas, el mapa muestra tenues todas las paradas de la ciudad.
+* **Mapa en vivo:** al elegir una ruta el mapa vuela a su recorrido, la línea se dibuja y las paradas aparecen escalonadas; el regreso por otras calles va punteado. Los buses se deslizan entre lecturas.
+* **Ocupación accesible (UX-07):** cada bus lleva color, icono y texto; el lector de pantalla anuncia ruta, estado y sillas libres.
+* **Cerca de mí (UX-04):** con permiso del navegador, las 3 paradas más cercanas con distancia a pie y sus rutas. La ubicación no sale del navegador.
+* **Planear viaje (UX-05):** sugerencias mientras se escribe, «Mi ubicación» como origen e «Ir desde / hasta aquí» desde una parada.
+* **Mis paradas (UX-08):** estrella en la parada; muestra el próximo bus y su llegada; «Deshacer» al quitarla.
+* **Bus:** ocupación, sillas libres y «Mostrar ocupación real del bus #…» con el plano o el gemelo 3D.
+* **Parada:** «este bus o el siguiente» en ida o regreso, con el recomendado y el tiempo estimado de llegada.
+* **Recorrido guiado (UX-06):** tres pasos la primera vez; se repite con el botón «?».
+* **Conexión (UX-09, UX-10):** franja «Sin conexión · reintentando» / «De nuevo en vivo», buses atenuados y siluetas mientras carga.
+* **Operación (UX-11, administrador y auditor):** indicadores de toda la flota (en servicio, ocupación, sobrecupo, sin reportar) que filtran los hallazgos; análisis por IA.
+* **Simulación y emulación:** buses ficticios solo en este navegador, con aviso de que no son datos reales.
+* **Accesibilidad:** foco visible, navegación con teclado, contraste AA y `prefers-reduced-motion`.
 
 ## Usarlo en local
 
