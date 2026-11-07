@@ -230,7 +230,9 @@ async function showRoutes() {
   const data = await api("/routes");
   const box = byId("routes");
   box.replaceChildren();
-  (data.routes || []).forEach((route, index) => {
+  // C1, C2 … C16 y luego E1 … E7: orden natural, no de texto (C10 iba antes que C2)
+  const sorted = (data.routes || []).slice().sort((a, b) => a.route_id.localeCompare(b.route_id, "es", { numeric: true }));
+  sorted.forEach((route, index) => {
     const info = routes.get(route.route_id) || {};
     routes.set(route.route_id, { ...info, name: route.name, stops: route.stops, color: ROUTE_COLORS[index % ROUTE_COLORS.length] });
     const chip = el("button", "chip");
