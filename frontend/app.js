@@ -852,7 +852,7 @@ function openBus(id) {
   const bus = findBus(id);
   if (!bus) return;
   openPanel("Ruta " + bus.route + (bus.dir ? " · " + (DIR_LABEL[bus.dir] || bus.dir) : ""), "Bus " + id);
-  panelState = { kind: "bus", id, timer: null };
+  panelState = { kind: "bus", id, timer: null, view: "3d" };
   const body = byId("panel-body");
   const stats = el("div", "stats");
   stats.id = "bus-stats";
@@ -865,10 +865,27 @@ function openBus(id) {
   const cabinBox = el("div", "cabin-box");
   cabinBox.id = "cabin-box";
   cabinBox.hidden = true;
-  // Gemelo 3D libre (gemelo/index.html), girable 360°; si el navegador no tiene WebGL, el plano 2D.
-  // Los dos se arman con los mismos identificadores de posición: ninguna imagen sale del bus.
+  // Dos vistas con los mismos identificadores de posición (ninguna imagen sale del bus): el gemelo 3D libre
+  // (gemelo/index.html), girable 360°, y el plano 2D. Sin WebGL solo queda el plano.
   const stage = el("div", "cabin-stage");
-  cabinBox.append(stage);
+  const views = el("div", "seg cabin-views");
+  views.setAttribute("role", "group");
+  views.setAttribute("aria-label", "Vista de la cabina");
+  [["3d", "Vista 3D · 360°"], ["plan", "Plano"]].forEach(([key, label]) => {
+    const b = el("button", "seg-btn", label);
+    b.type = "button";
+    b.dataset.view = key;
+    b.setAttribute("aria-pressed", String(key === "3d"));
+    b.addEventListener("click", () => {
+      if (!panelState || panelState.view === key) return;
+      panelState.view = key;
+      views.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+      stage.replaceChildren();
+      showCabin(stage);
+    });
+    views.append(b);
+  });
+  cabinBox.append(views, stage);
   const privacy = el("p", "privacy");
   privacy.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg>';
   privacy.append("Plano armado con identificadores de posición. Ninguna imagen ni rostro sale del bus." +
@@ -912,7 +929,7 @@ function fillBusStats() {
 // Pinta la última lectura de la cabina en la vista elegida (plano o gemelo 3D).
 function showCabin(stage) {
   const data = panelState && panelState.cabin;
-  if (panelState && panelState.noGl) {
+  if (panelState && (panelState.noGl || panelState.view === "plan")) {
     let plan = stage.querySelector(".cabin");
     if (data) { if (plan) Cabin.update(plan, data.occupied); else stage.prepend(Cabin.build(data.occupied)); }
   } else {
@@ -926,7 +943,13 @@ function showCabin(stage) {
         const nogl = frame.contentDocument && frame.contentDocument.getElementById("nogl");
         if (nogl && !nogl.hidden && panelState) {
           panelState.noGl = true;
+          panelState.view = "plan";
           frame.remove();
+          const views = stage.parentNode && stage.parentNode.querySelector(".cabin-views");
+          if (views) views.querySelectorAll("button").forEach((x) => {
+            x.setAttribute("aria-pressed", String(x.dataset.view === "plan"));
+            if (x.dataset.view === "3d") { x.disabled = true; x.title = "Este navegador no tiene WebGL"; }
+          });
           stage.prepend(el("p", "notice", "Tu navegador no puede mostrar el 3D: tiene desactivada la aceleración por hardware (WebGL). " +
             "Actívala en Configuración › Sistema › «Usar aceleración por hardware» y reinicia el navegador. Mientras tanto, este es el plano de la cabina."));
         }
