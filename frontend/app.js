@@ -852,7 +852,7 @@ function openBus(id) {
   const bus = findBus(id);
   if (!bus) return;
   openPanel("Ruta " + bus.route + (bus.dir ? " · " + (DIR_LABEL[bus.dir] || bus.dir) : ""), "Bus " + id);
-  panelState = { kind: "bus", id, timer: null, view: "3d" };
+  panelState = { kind: "bus", id, timer: null, view: "plan", prevOcc: null };
   const body = byId("panel-body");
   const stats = el("div", "stats");
   stats.id = "bus-stats";
@@ -871,11 +871,13 @@ function openBus(id) {
   const views = el("div", "seg cabin-views");
   views.setAttribute("role", "group");
   views.setAttribute("aria-label", "Vista de la cabina");
-  [["3d", "Vista 3D · 360°"], ["plan", "Plano"]].forEach(([key, label]) => {
+  const activity = el("p", "cabin-activity");
+  activity.setAttribute("aria-live", "polite");
+  [["plan", "Plano"], ["3d", "Vista 3D · 360°"]].forEach(([key, label]) => {
     const b = el("button", "seg-btn", label);
     b.type = "button";
     b.dataset.view = key;
-    b.setAttribute("aria-pressed", String(key === "3d"));
+    b.setAttribute("aria-pressed", String(key === "plan"));
     b.addEventListener("click", () => {
       if (!panelState || panelState.view === key) return;
       panelState.view = key;
@@ -885,7 +887,7 @@ function openBus(id) {
     });
     views.append(b);
   });
-  cabinBox.append(views, stage);
+  cabinBox.append(views, activity, stage);
   const privacy = el("p", "privacy");
   privacy.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg>';
   privacy.append("Plano armado con identificadores de posición. Ninguna imagen ni rostro sale del bus." +
@@ -932,6 +934,19 @@ const HAS_WEBGL = (() => {
   try { const c = document.createElement("canvas"); return !!(c.getContext("webgl2") || c.getContext("webgl")); } catch (_) { return false; }
 })();
 
+// Quién subió y quién bajó desde la lectura anterior (para cualquier vista, también el gemelo three.js).
+function cabinActivity(stage, data) {
+  const box = stage.parentNode && stage.parentNode.querySelector(".cabin-activity");
+  if (!box || !data || !panelState) return;
+  const now = new Set(data.occupied || []), before = panelState.prevOcc;
+  panelState.prevOcc = now;
+  if (!before) { box.textContent = now.size + " puestos ocupados. Aquí verás quién sube y quién baja en cada parada."; return; }
+  const up = [...now].filter((p) => !before.has(p)).length, down = [...before].filter((p) => !now.has(p)).length;
+  if (!up && !down) return;  // sin cambios: se conserva el último movimiento
+  const at = new Date().toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  box.innerHTML = '<span class="stop">Parada · ' + at + '</span><span class="up">▲ subieron <b>' + up + '</b></span><span class="down">▼ bajaron <b>' + down + "</b></span>";
+}
+
 function showCabin(stage) {
   const data = panelState && panelState.cabin;
   if (panelState && panelState.view === "3d" && (panelState.noGl || !HAS_WEBGL)) {
@@ -972,6 +987,7 @@ async function loadCabin(id, stage) {
     const data = Emu.cabin(id) || await api("/buses/" + encodeURIComponent(id) + "/cabin");
     if (!panelState || panelState.id !== id) return;
     panelState.cabin = data;
+    cabinActivity(stage, data);
     showCabin(stage);
   } catch (err) {
     stage.replaceChildren(el("p", "notice", err.message));
