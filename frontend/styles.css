@@ -218,8 +218,9 @@ textarea { resize: vertical; }
 .cabin-head { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--soft); }
 .cabin-row { display: grid; grid-template-columns: 26px repeat(2, minmax(0, 1fr)) minmax(0, 1.25fr) repeat(2, minmax(0, 1fr)); gap: 6px; align-items: center; }
 .cabin-row .n { font-size: 12px; color: var(--muted); }
-.seat { height: 30px; border-radius: 8px; border: 2px solid var(--line-2); transition: background .3s var(--ease), border-color .3s var(--ease); }
-.seat.on { background: var(--brand-2); border-color: var(--brand-2); animation: seat-in .32s var(--ease) both; animation-delay: calc(var(--i, 0) * 20ms); }
+/* silla libre en verde, ocupada en rojo; el borde y la leyenda repiten la información para quien no distingue colores */
+.seat { height: 30px; border-radius: 8px; border: 2px solid var(--ok-strong); background: var(--ok); transition: background .3s var(--ease), border-color .3s var(--ease); }
+.seat.on { background: var(--bad); border-color: var(--bad-text); animation: seat-in .32s var(--ease) both; animation-delay: calc(var(--i, 0) * 20ms); }
 @keyframes seat-in { from { transform: scale(.6); opacity: .2; } to { transform: none; opacity: 1; } }
 .stand { height: 30px; border-radius: 8px; border: 2px dashed var(--amber); color: var(--amber); font-size: 12px; display: grid; place-items: center; }
 .stand.on { background: color-mix(in srgb, var(--amber) 30%, transparent); color: var(--fg); border-style: solid; animation: seat-in .32s var(--ease) both; animation-delay: calc(var(--i, 0) * 20ms); }
@@ -227,7 +228,7 @@ textarea { resize: vertical; }
 .bench { display: grid; grid-template-columns: 26px repeat(5, minmax(0, 1fr)); gap: 6px; }
 .cabin-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--soft); }
 .cabin-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 4px; vertical-align: -1px; margin-right: 4px; }
-.cabin-legend .k-on { background: var(--brand-2); } .cabin-legend .k-off { border: 2px solid var(--line-2); } .cabin-legend .k-stand { border: 2px dashed var(--amber); }
+.cabin-legend .k-on { background: var(--bad); } .cabin-legend .k-off { background: var(--ok); } .cabin-legend .k-stand { border: 2px dashed var(--amber); }
 
 /* parada: este bus o el siguiente */
 .seg { display: grid; grid-auto-flow: column; gap: 6px; padding: 6px; border-radius: 14px; background: var(--bg); }

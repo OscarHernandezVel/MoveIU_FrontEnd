@@ -871,11 +871,11 @@ function openBus(id) {
   views.setAttribute("role", "group");
   views.setAttribute("aria-label", "Vista de la cabina");
   const stage = el("div", "cabin-stage");
-  CABIN_VIEWS.forEach(([key, label], i) => {
+  CABIN_VIEWS.forEach(([key, label]) => {
     const b = el("button", "seg-btn", label);
     b.type = "button";
     b.dataset.view = key;
-    b.setAttribute("aria-pressed", String(i === 0));
+    b.setAttribute("aria-pressed", String(key === "front"));  // se abre en 3D, desde la cámara frontal
     b.addEventListener("click", () => {
       views.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
       stage.replaceChildren();
