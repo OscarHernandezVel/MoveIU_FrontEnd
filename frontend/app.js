@@ -274,7 +274,11 @@ function toggleRoute(id, chip) {
 
 async function ensurePath(id) {
   const route = routes.get(id);
-  if (!route.path) route.path = (await api("/routes/" + encodeURIComponent(id))).path || [];
+  if (!route.path) {
+    const data = await api("/routes/" + encodeURIComponent(id));
+    route.path = data.path || [];
+    route.returnPath = data.return_path || null;  // solo si el regreso va por otras calles
+  }
   return route.path;
 }
 
@@ -286,6 +290,12 @@ async function drawRoute(id) {
   const group = L.layerGroup().addTo(map);
   route.layers = group;
   const latlngs = route.path.map((p) => [p.lat, p.lng]);
+  if (route.returnPath && route.returnPath.length > 1) {
+    // El regreso por otras calles: punteado y más tenue, debajo de la ida.
+    L.polyline(route.returnPath.map((p) => [p.lat, p.lng]), {
+      color: route.color, weight: 4, opacity: 0.55, dashArray: "2 9", lineCap: "round", interactive: false,
+    }).addTo(group);
+  }
   if (latlngs.length > 1) {
     const line = L.polyline(latlngs, { color: route.color, weight: 5, opacity: 0.9, className: "route-line", interactive: false }).addTo(group);
     const path = line.getElement();

@@ -186,6 +186,8 @@ textarea { resize: vertical; }
           border-radius: 14px; background: color-mix(in srgb, var(--surface) 92%, transparent); border: 1px solid var(--line); font-size: 13px; color: var(--soft); }
 .legend li { display: flex; align-items: center; gap: 6px; }
 .sw { width: 10px; height: 10px; border-radius: 50%; }
+.sw-line { width: 18px; height: 0; border-top: 4px solid var(--soft); border-radius: 2px; }
+.sw-line.back { border-top-style: dotted; opacity: .7; }
 
 /* ---------------------------------------------------------------- panel lateral (HU-05 / HU-06) */
 .scrim { position: fixed; inset: 64px 0 0; z-index: 900; background: rgba(4, 8, 20, .45); animation: fade .28s var(--ease) both; }
