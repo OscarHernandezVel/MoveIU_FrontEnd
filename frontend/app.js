@@ -607,6 +607,7 @@ function suggest(input, list) {
 
 // «Elegir destino manualmente»: el siguiente toque en el mapa fija el destino en la parada más cercana a ese punto.
 let picking = false, destMarker = null;
+let destPoint = null;  // { lat, lng, name }: el punto tocado; el planificador calcula la caminata hasta ahí
 
 function setPicking(on) {
   picking = on;
@@ -620,14 +621,10 @@ function pickDestination(latlng) {
   if (!picking) return;
   setPicking(false);
   if (!stopIndex.length) { toast("Todavía no hay paradas cargadas."); return; }
-  const ranked = stopIndex.map((entry) => ({ entry, m: latlng.distanceTo([entry.stop.location.lat, entry.stop.location.lng]) }))
-    .sort((a, b) => a.m - b.m);
-  // Mejor una parada un poco más lejos (hasta 500 m más) por la que pase una ruta desde el origen, que la más
-  // cercana sin conexión directa: así el viaje tiene respuesta.
-  const fromKey = norm(byId("trip-from").value);
-  const fromRoutes = new Set(stopIndex.filter((e) => e.key === fromKey).flatMap((e) => e.routes));
-  const near = (fromRoutes.size && ranked.find((x) => x.m <= ranked[0].m + 500 && x.entry.routes.some((r) => fromRoutes.has(r)))) || ranked[0];
+  const near = stopIndex.map((entry) => ({ entry, m: latlng.distanceTo([entry.stop.location.lat, entry.stop.location.lng]) }))
+    .sort((a, b) => a.m - b.m)[0];
   byId("trip-to").value = near.entry.stop.name;
+  destPoint = { lat: latlng.lat, lng: latlng.lng, name: near.entry.stop.name };
   if (destMarker) destMarker.remove();
   destMarker = L.layerGroup([
     L.polyline([latlng, [near.entry.stop.location.lat, near.entry.stop.location.lng]], { color: "#E05018", weight: 3, dashArray: "4 8", interactive: false }),
@@ -641,6 +638,7 @@ function pickDestination(latlng) {
 
 byId("pick-dest").addEventListener("click", () => setPicking(!picking));
 byId("pick-cancel").addEventListener("click", () => setPicking(false));
+byId("trip-to").addEventListener("input", () => { destPoint = null; });  // escribió otra llegada: ya no es el punto
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && picking) setPicking(false); });
 
 function openPlanner(open) {
@@ -651,42 +649,41 @@ function openPlanner(open) {
 }
 byId("plan-btn").addEventListener("click", () => openPlanner(byId("trip").hidden));
 
-// Rutas que pasan por las dos paradas. El orden de las paradas es el de ida: si «desde» va antes, se viaja de ida;
-// si va después, de regreso (el regreso recorre las paradas al revés).
-function directTrips(fromName, toName) {
-  const trips = [];
-  routes.forEach((route, routeId) => {
-    const stops = route.stops || [];
-    const from = stops.find((s) => norm(s.name) === norm(fromName));
-    const to = stops.find((s) => norm(s.name) === norm(toName));
-    if (!from || !to || from.stop_id === to.stop_id) return;
-    const dir = from.order < to.order ? "outbound" : "return";
-    trips.push({ routeId, from, to, dir, stops: Math.abs(to.order - from.order) });
-  });
-  return trips.sort((a, b) => a.stops - b.stops).slice(0, 6);
-}
+const stopPlace = (name) => (stopIndex.find((e) => e.key === norm(name)) || {}).stop?.location || null;
+const isExact = (trip) => trip.walkFrom < 30 && trip.walkTo < 30;
 
 async function planTrip(fromName, toName) {
   const out = byId("trip-results");
   if (!fromName || !toName) { out.replaceChildren(el("li", "notice", "Escribe la parada de salida y la de llegada.")); return; }
   if (norm(fromName) === norm(toName)) { out.replaceChildren(el("li", "notice", "La salida y la llegada son la misma parada.")); return; }
-  const trips = directTrips(fromName, toName);
-  if (!trips.length) {
-    out.replaceChildren(el("li", "notice", "Ninguna ruta pasa por las dos paradas. Prueba con una parada cercana."));
+  const usePoint = destPoint && norm(toName) === norm(destPoint.name);
+  const origin = stopPlace(fromName), dest = usePoint ? destPoint : stopPlace(toName);
+  if (!origin || !dest) {
+    out.replaceChildren(el("li", "notice", "Elige la salida y la llegada de la lista de paradas, o marca tu destino en el mapa."));
     return;
   }
+  const trips = walkRideWalk(routes, origin, dest);
+  if (!trips.length) { out.replaceChildren(el("li", "notice", "Todavía no hay rutas cargadas.")); return; }
   out.replaceChildren(el("li", "spinner"));
   const results = await Promise.all(trips.map(async (trip) => {
     try {
       const q = "?route_id=" + encodeURIComponent(trip.routeId) + "&direction=" + trip.dir + "&limit=2";
       const data = await api("/stops/" + encodeURIComponent(trip.from.stop_id) + "/next-buses" + q);
-      trip.bus = data.buses.find((b) => b.recommended) || data.buses[0] || null;
+      // Solo sirve un bus que llegue a la parada después que el pasajero, que primero camina hasta ella.
+      const reach = (b) => b.eta_min >= trip.walkFrom / 80;
+      trip.bus = data.buses.find((b) => b.recommended && reach(b)) || data.buses.find(reach) || null;
+      trip.missed = !trip.bus && data.buses.length > 0;
     } catch (_) { trip.bus = null; }
     return trip;
   }));
-  // Primero los que tienen un bus en camino, por tiempo de llegada; luego los demás, por número de paradas.
-  results.sort((a, b) => (a.bus ? a.bus.eta_min : 1e9) - (b.bus ? b.bus.eta_min : 1e9) || a.stops - b.stops);
-  out.replaceChildren(...results.map((trip, i) => {
+  // Primero los que tienen un bus alcanzable; luego menos minutos a pie, el bus que llega antes y menos paradas.
+  const walkMin = (t) => Math.round((t.walkFrom + t.walkTo) / 80);
+  results.sort((a, b) => (b.bus ? 1 : 0) - (a.bus ? 1 : 0) || walkMin(a) - walkMin(b)
+    || (a.bus ? a.bus.eta_min : 0) - (b.bus ? b.bus.eta_min : 0) || a.stops - b.stops);
+  const notice = results[0].far
+    ? "Ninguna ruta pasa a menos de 800 m de la salida y de la llegada. La más cercana:"
+    : !usePoint && !results.some(isExact) ? "Ninguna ruta pasa por las dos paradas. Estas te dejan cerca, caminando un poco:" : null;
+  out.replaceChildren(...(notice ? [el("li", "notice", notice)] : []), ...results.map((trip, i) => {
     const li = el("li");
     const card = el("button", "trip-card" + (i === 0 && trip.bus ? " best" : ""));
     card.type = "button";
@@ -700,9 +697,11 @@ async function planTrip(fromName, toName) {
       card.append(el("span", "eta", "Bus " + trip.bus.bus.bus_id + " · " + etaText(trip.bus.eta_min).toLowerCase()),
         el("span", "state-line " + occ.state, (occ.label || STATE_LABEL[occ.state]) + " · " + occ.percentage + " %"));
     } else {
-      card.append(el("span", "muted", "Ningún bus en camino ahora mismo"));
+      card.append(el("span", "muted", trip.missed ? "El próximo bus pasa antes de que alcances la parada" : "Ningún bus en camino ahora mismo"));
     }
+    if (trip.walkFrom >= 30) card.append(el("span", "walk-line", "Camina " + walk(trip.walkFrom) + " hasta " + trip.from.name));
     card.append(el("span", "free", "Sube en " + trip.from.name + " · baja en " + trip.to.name));
+    if (trip.walkTo >= 30) card.append(el("span", "walk-line", "Luego camina " + walk(trip.walkTo) + " hasta " + (usePoint ? "tu destino" : toName)));
     card.addEventListener("click", () => {
       if (!selected.has(trip.routeId)) toggleRoute(trip.routeId, true);
       openStop(trip.routeId, trip.from, trip.dir);
