@@ -1,0 +1,9 @@
+{
+  "appId": "co.moveiu.app",
+  "appName": "MoveIU",
+  "webDir": "www",
+  "server": {
+    "url": "https://app.18-233-2-19.sslip.io",
+    "androidScheme": "https"
+  }
+}

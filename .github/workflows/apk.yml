@@ -1,0 +1,65 @@
+# Compila el APK de MoveIU (app-android/) y lo publica en la release «apk-latest» para descargarlo y compartirlo.
+name: APK Android
+
+on:
+  push:
+    branches: [main]
+    paths: ["app-android/**", "frontend/icons/icon-1024.png", ".github/workflows/apk.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # crear o actualizar la release apk-latest
+
+concurrency: apk
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app-android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      # La misma llave de depuración en cada compilación: el APK nuevo se instala encima del anterior.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: moveiu-debug-keystore
+      - name: Proyecto Android
+        run: |
+          npm install --no-audit --no-fund
+          npx cap add android
+      - name: Icono de MoveIU
+        run: |
+          mkdir -p assets
+          cp ../frontend/icons/icon-1024.png assets/icon-only.png
+          cp ../frontend/icons/icon-1024.png assets/icon-foreground.png
+          npx @capacitor/assets generate --android --iconBackgroundColor "#E05018" --iconBackgroundColorDark "#E05018"
+      - name: Permiso de ubicación y número de versión
+        run: |
+          sed -i 's|    <uses-permission android:name="android.permission.INTERNET" />|&\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />|' android/app/src/main/AndroidManifest.xml
+          grep -q ACCESS_FINE_LOCATION android/app/src/main/AndroidManifest.xml
+          sed -i "s/versionCode 1/versionCode ${{ github.run_number }}/; s/versionName \"1.0\"/versionName \"1.0.${{ github.run_number }}\"/" android/app/build.gradle
+          npx cap sync android
+      - name: Compilar
+        working-directory: app-android/android
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug
+          cp app/build/outputs/apk/debug/app-debug.apk ../MoveIU.apk
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-latest
+          name: MoveIU para Android (prueba)
+          prerelease: true
+          files: app-android/MoveIU.apk
+          body: |
+            APK de prueba de MoveIU (compilación ${{ github.run_number }}). Abre la app publicada en https://app.18-233-2-19.sslip.io
+            Instalación: envíe MoveIU.apk por WhatsApp, ábralo en el celular y permita «Instalar apps desconocidas» para WhatsApp o el gestor de archivos.
