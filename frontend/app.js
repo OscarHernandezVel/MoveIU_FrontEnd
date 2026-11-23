@@ -1418,3 +1418,6 @@ byId("route-search").addEventListener("keydown", (e) => { if (e.key === "Escape"
 (async () => {
   if (load("refresh_token") && (await refreshTokens())) await start();
 })();
+
+// Instalable como app (PWA): el service worker solo guarda la interfaz, nunca los datos en vivo.
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});

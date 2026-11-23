@@ -1,0 +1,17 @@
+{
+  "id": "/",
+  "name": "MoveIU · Ocupación de buses en vivo",
+  "short_name": "MoveIU",
+  "description": "Mira cuánto espacio queda en cada bus antes de subir.",
+  "lang": "es",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F8F5F0",
+  "theme_color": "#F8F5F0",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
