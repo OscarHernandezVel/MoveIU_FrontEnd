@@ -41,7 +41,8 @@ jobs:
           mkdir -p assets
           cp ../frontend/icons/icon-1024.png assets/icon-only.png
           cp ../frontend/icons/icon-1024.png assets/icon-foreground.png
-          npx @capacitor/assets generate --android --iconBackgroundColor "#E05018" --iconBackgroundColorDark "#E05018"
+          cp icon-background.png assets/icon-background.png   # el icono adaptable necesita una imagen de fondo, no solo un color
+          npx @capacitor/assets generate --android
       - name: Permiso de ubicación y número de versión
         run: |
           sed -i 's|    <uses-permission android:name="android.permission.INTERNET" />|&\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />|' android/app/src/main/AndroidManifest.xml
